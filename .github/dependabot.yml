@@ -4,5 +4,9 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    groups:
+      nuget-dependencies:
+        patterns:
+          - "*"
     ignore:
       - dependency-name: "SixLabors.ImageSharp"
