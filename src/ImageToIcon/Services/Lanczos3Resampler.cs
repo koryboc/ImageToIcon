@@ -25,7 +25,7 @@ public static class Lanczos3Resampler
 
         // Horizontal pass: srcW -> targetW, keep srcH rows.
         var intermediate = new float[(long)targetW * srcH * 4];
-        for (var y = 0; y < srcH; y++)
+        Parallel.For(0, srcH, y =>
         {
             var srcRow = (long)y * srcW * 4;
             var dstRow = (long)y * targetW * 4;
@@ -52,11 +52,11 @@ public static class Lanczos3Resampler
                 intermediate[o + 2] = r;
                 intermediate[o + 3] = a;
             }
-        }
+        });
 
         // Vertical pass: srcH -> targetH, width stays targetW.
         var result = new byte[(long)targetW * targetH * 4];
-        for (var y = 0; y < targetH; y++)
+        Parallel.For(0, targetH, y =>
         {
             var w = yw[y];
             var dstRow = (long)y * targetW * 4;
@@ -82,7 +82,7 @@ public static class Lanczos3Resampler
                 result[o + 2] = ToByte(r);
                 result[o + 3] = ToByte(a);
             }
-        }
+        });
 
         return BuildSkBitmap(result, targetW, targetH);
     }

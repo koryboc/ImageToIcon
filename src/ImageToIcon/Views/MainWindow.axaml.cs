@@ -49,9 +49,6 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Hides the white DWM flash until ApplyDarkTitlebar lands.
-        Opacity = 0;
-
         if (OperatingSystem.IsWindows())
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
@@ -112,7 +109,6 @@ public partial class MainWindow : Window
         Opened += (_, _) =>
         {
             Win32Window.ApplyDarkTitlebar(this);
-            Dispatcher.UIThread.Post(() => Opacity = 1, DispatcherPriority.Background);
             _ = CheckForUpdateAsync();
         };
 
@@ -134,13 +130,9 @@ public partial class MainWindow : Window
         };
 
         if (startupFile != null)
-        {
             LoadFromPath(startupFile);
-        }
         else
-        {
             LoadDefaultSymbol();
-        }
     }
 
     private void InitializeComponent()
@@ -155,15 +147,18 @@ public partial class MainWindow : Window
             var uri = new Uri("avares://ImageToIcon/Assets/Symbol.svg");
             using var stream = AssetLoader.Open(uri);
             _sourceImage = SvgLoader.TryLoad(stream);
-            if (_sourceImage == null) return;
-            _sourceName = "icon";
-            UpdateAvailability();
-            RebuildThumbs();
+            if (_sourceImage != null)
+            {
+                _sourceName = "icon";
+                UpdateAvailability();
+            }
         }
         catch
         {
             // ignored
         }
+
+        RebuildThumbs();
     }
 
     private async void LoadFromPath(string path)
@@ -273,7 +268,10 @@ public partial class MainWindow : Window
 
         var source = _sourceImage;
         if (source == null)
+        {
+            Opacity = 1;
             return;
+        }
 
         var maxDim = Math.Max(source.Width, source.Height);
         var sizes = _sizeToggles
@@ -299,43 +297,53 @@ public partial class MainWindow : Window
                 _smallPanel.MaxHeight = ComputeSmallColumnCap(topSize.Value);
         }
 
-        for (var i = 0; i < thumbs.Count; i++)
+        if (_debugPreview)
         {
-            var thumb = thumbs[i];
-            if (_debugPreview)
+            for (var i = 0; i < thumbs.Count; i++)
             {
-                var (dbgSrc, dbgPreview) = RenderDebugFrame(thumb.Size, i, thumbs.Count);
-                thumb.Fill(dbgSrc, dbgPreview);
-                continue;
+                var (dbgSrc, dbgPreview) = RenderDebugFrame(thumbs[i].Size, i, thumbs.Count);
+                thumbs[i].Fill(dbgSrc, dbgPreview);
             }
+        }
+        else
+        {
+            var fillTasks = thumbs.Select(thumb => Task.Run(async () =>
+            {
+                ct.ThrowIfCancellationRequested();
+                var resized = IconFactory.ResizePadded(source, thumb.Size);
+                var preview = IconThumb.ToAvaloniaBitmap(resized);
+                if (ct.IsCancellationRequested)
+                {
+                    resized.Dispose();
+                    preview.Dispose();
+                    return;
+                }
 
-            (SKBitmap src, Bitmap preview) pair;
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        resized.Dispose();
+                        preview.Dispose();
+                        return;
+                    }
+
+                    thumb.Fill(resized, preview);
+                }, DispatcherPriority.Background);
+            }, ct)).ToArray();
+
             try
             {
-                pair = await Task.Run(() =>
-                {
-                    ct.ThrowIfCancellationRequested();
-                    var resized = IconFactory.ResizePadded(source, thumb.Size);
-                    ct.ThrowIfCancellationRequested();
-                    return (resized, IconThumb.ToAvaloniaBitmap(resized));
-                }, ct);
+                await Task.WhenAll(fillTasks);
             }
             catch (OperationCanceledException)
             {
                 return;
             }
-
-            if (ct.IsCancellationRequested)
-            {
-                pair.src.Dispose();
-                pair.preview.Dispose();
-                return;
-            }
-
-            thumb.Fill(pair.src, pair.preview);
         }
 
         ApplyTitlebarIcon();
+        Opacity = 1;
     }
 
     private void ApplyTitlebarIcon()

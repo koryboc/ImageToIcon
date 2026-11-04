@@ -11,6 +11,7 @@
         Icon="/Assets/ProgramIcon.ico"
         Background="{DynamicResource AppWindowBrush}"
         Foreground="{DynamicResource AppTextBrush}"
+        Opacity="0"
         DragDrop.AllowDrop="True">
 
     <Window.Styles>
