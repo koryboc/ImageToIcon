@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -38,9 +39,10 @@ public partial class MainWindow : Window
     private double _padding;
     private Task _rebuildChain = Task.CompletedTask;
     private CancellationTokenSource? _rebuildCts;
+
+    private bool _sliderDragging;
     private SKBitmap? _sourceImage;
     private string? _sourceName;
-
     private bool _suppressTopFrameSync;
     private TrayIcon? _trayIcon;
 
@@ -110,6 +112,9 @@ public partial class MainWindow : Window
             _padding = v;
             DebouncedRebuild();
         };
+
+        AttachSliderDragTracking(maskSlider);
+        AttachSliderDragTracking(paddingSlider);
 
         topPanel.ItemsSource = _topThumbs;
         _smallPanel.ItemsSource = _smallThumbs;
@@ -281,6 +286,23 @@ public partial class MainWindow : Window
         _rebuildChain = RebuildThumbsChainedAsync(_rebuildChain, fullRefill);
     }
 
+    private void AttachSliderDragTracking(Slider slider)
+    {
+        slider.AddHandler(PointerPressedEvent, (_, _) => _sliderDragging = true, RoutingStrategies.Tunnel);
+        slider.AddHandler(PointerReleasedEvent, (_, _) => OnSliderReleased(), RoutingStrategies.Tunnel);
+        slider.AddHandler(PointerCaptureLostEvent, (_, _) => OnSliderReleased(), RoutingStrategies.Tunnel);
+    }
+
+    private void OnSliderReleased()
+    {
+        if (!_sliderDragging)
+            return;
+        _sliderDragging = false;
+        foreach (var t in _smallThumbs)
+            t.DisposeContent();
+        RebuildThumbs();
+    }
+
     private void DebouncedRebuild()
     {
         _maskDebounceCts?.Cancel();
@@ -342,6 +364,35 @@ public partial class MainWindow : Window
             _smallThumbs.Clear();
             _smallPanel?.MaxHeight = double.PositiveInfinity;
             Opacity = 1;
+            return;
+        }
+
+        if (_sliderDragging)
+        {
+            if (_topThumbs.Count == 0 || _debugPreview)
+                return;
+            var top = _topThumbs[0];
+            try
+            {
+                var (resized, preview) = await Task.Run(() =>
+                {
+                    var r = IconFactory.ResizePadded(source, top.Size, _maskRadius, _padding);
+                    var p = IconThumb.ToAvaloniaBitmap(r);
+                    return (r, p);
+                }, ct);
+                if (ct.IsCancellationRequested)
+                {
+                    resized.Dispose();
+                    preview.Dispose();
+                    return;
+                }
+
+                await Dispatcher.UIThread.InvokeAsync(() => top.Fill(resized, preview, false), DispatcherPriority.Background);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
             return;
         }
 
