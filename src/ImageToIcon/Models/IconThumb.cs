@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using SkiaSharp;
 
 namespace ImageToIcon.Models;
@@ -22,8 +23,8 @@ public class IconThumb(int size) : INotifyPropertyChanged
 
     public void Fill(SKBitmap newSource, Bitmap newPreview, bool keepSource)
     {
-        Source?.Dispose();
-        Preview?.Dispose();
+        var oldSource = Source;
+        var oldPreview = Preview;
         Preview = newPreview;
         if (keepSource)
         {
@@ -31,12 +32,14 @@ public class IconThumb(int size) : INotifyPropertyChanged
         }
         else
         {
-            newSource.Dispose();
+            DeferDispose(newSource);
             Source = null;
         }
 
         Raise(nameof(Source));
         Raise(nameof(Preview));
+        DeferDispose(oldSource);
+        DeferDispose(oldPreview);
     }
 
     public void Replace(SKBitmap newSource)
@@ -47,10 +50,18 @@ public class IconThumb(int size) : INotifyPropertyChanged
 
     public void DisposeContent()
     {
-        Source?.Dispose();
-        Preview?.Dispose();
+        DeferDispose(Source);
+        DeferDispose(Preview);
         Source = null;
         Preview = null;
+    }
+
+    // Defer so the render thread can release its native ref before dispose.
+    private static void DeferDispose(IDisposable? disposable)
+    {
+        if (disposable == null)
+            return;
+        Dispatcher.UIThread.Post(disposable.Dispose, DispatcherPriority.Background);
     }
 
     public static Bitmap ToAvaloniaBitmap(SKBitmap img)
@@ -63,13 +74,11 @@ public class IconThumb(int size) : INotifyPropertyChanged
             PixelFormat.Bgra8888,
             AlphaFormat.Premul);
 
-        using (var fb = wb.Lock())
-        {
-            var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
-            using var pm = img.PeekPixels();
-            if (pm == null || !pm.ReadPixels(info, fb.Address, fb.RowBytes))
-                throw new InvalidOperationException("Failed to read SKBitmap pixels into WriteableBitmap.");
-        }
+        using var fb = wb.Lock();
+        var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using var pm = img.PeekPixels();
+        if (pm == null || !pm.ReadPixels(info, fb.Address, fb.RowBytes))
+            throw new InvalidOperationException("Failed to read SKBitmap pixels into WriteableBitmap.");
 
         return wb;
     }
