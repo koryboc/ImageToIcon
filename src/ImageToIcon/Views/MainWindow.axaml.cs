@@ -758,12 +758,20 @@ public partial class MainWindow : Window
         });
         if (file == null)
             return;
-        var images = _topThumbs.Concat(_smallThumbs)
-                               .Where(t => t.Source != null)
-                               .OrderByDescending(t => t.Size)
-                               .Select(t => IconFactory.Copy(t.Source!));
+        var ordered = _topThumbs.Concat(_smallThumbs)
+                                .OrderByDescending(t => t.Size)
+                                .ToList();
+        var images = new List<SKBitmap>(ordered.Count);
         try
         {
+            foreach (var t in ordered)
+            {
+                if (t.Source != null)
+                    images.Add(IconFactory.Copy(t.Source));
+                else if (_sourceImage != null)
+                    images.Add(IconFactory.ResizePadded(_sourceImage, t.Size, _maskRadius, _padding));
+            }
+
             IconFactory.Save(images, file.Path.LocalPath);
         }
         catch (Exception ex)
@@ -775,6 +783,11 @@ public partial class MainWindow : Window
                 Content = new TextBlock { Text = ex.Message, Margin = new Thickness(12) }
             };
             await dlg.ShowDialog(this);
+        }
+        finally
+        {
+            foreach (var img in images)
+                img.Dispose();
         }
     }
 
