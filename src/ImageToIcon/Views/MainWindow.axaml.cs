@@ -20,7 +20,7 @@ using Point = Avalonia.Point;
 
 namespace ImageToIcon.Views;
 
-public class MainWindow : Window
+public partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _cts = new();
     private readonly SelfUpdateCoordinator _selfUpdate;
