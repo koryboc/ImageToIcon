@@ -13,7 +13,7 @@ using ImageToIcon.Services;
 
 namespace ImageToIcon.Views;
 
-public partial class AddSizesDialog : Window
+public class AddSizesDialog : Window
 {
     private static readonly int[] Bases = [16, 24, 32, 48];
 
