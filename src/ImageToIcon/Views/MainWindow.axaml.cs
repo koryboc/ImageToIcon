@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using ImageToIcon.Models;
 using ImageToIcon.Platform;
 using ImageToIcon.Services;
@@ -47,6 +48,9 @@ public partial class MainWindow : Window
     public MainWindow(string? startupFile)
     {
         InitializeComponent();
+
+        // Hides the white DWM flash until ApplyDarkTitlebar lands.
+        Opacity = 0;
 
         if (OperatingSystem.IsWindows())
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -108,6 +112,7 @@ public partial class MainWindow : Window
         Opened += (_, _) =>
         {
             Win32Window.ApplyDarkTitlebar(this);
+            Dispatcher.UIThread.Post(() => Opacity = 1, DispatcherPriority.Background);
             _ = CheckForUpdateAsync();
         };
 
