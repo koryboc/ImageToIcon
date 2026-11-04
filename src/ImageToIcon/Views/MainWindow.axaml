@@ -172,10 +172,16 @@
                                    TextAlignment="Center"
                                    VerticalAlignment="Center" />
                     </ToggleButton>
-                    <Slider x:Name="MaskSlider" Minimum="0" Maximum="100" Width="100"
+                    <Slider x:Name="MaskSlider" Minimum="0" Maximum="100" Width="80"
                             VerticalAlignment="Center" Margin="4,0,0,0"
                             ToolTip.Tip="Corner radius (0 = square, 100 = circle)" />
                     <TextBlock x:Name="MaskValue" Text="0" MinWidth="24"
+                               VerticalAlignment="Center" FontSize="11"
+                               Foreground="{DynamicResource AppSubTextBrush}" />
+                    <Slider x:Name="PaddingSlider" Minimum="0" Maximum="10" Width="50"
+                            VerticalAlignment="Center" Margin="4,0,0,0"
+                            ToolTip.Tip="Padding per side (percent; floored to whole pixels)" />
+                    <TextBlock x:Name="PaddingValue" Text="0" MinWidth="24"
                                VerticalAlignment="Center" FontSize="11"
                                Foreground="{DynamicResource AppSubTextBrush}" />
                 </StackPanel>

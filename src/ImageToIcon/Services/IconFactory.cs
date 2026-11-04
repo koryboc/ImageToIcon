@@ -18,13 +18,13 @@ public static class IconFactory
         256, 48, 32, 24, 16
     ];
 
-    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0)
+    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0)
     {
         var maxDim = Math.Max(source.Width, source.Height);
         foreach (var s in sizes.OrderByDescending(x => x))
         {
             if (s > maxDim || s < MinSize || s > MaxSize) continue;
-            yield return ResizePadded(source, s, maskRadius);
+            yield return ResizePadded(source, s, maskRadius, padding);
         }
     }
 
@@ -32,9 +32,14 @@ public static class IconFactory
     // Uses a separable Lanczos3 resampler to match the quality of ImageSharp's
     // KnownResamplers.Lanczos3 (previously used before the SkiaSharp migration).
     // maskRadius: 0 = no mask, 1 = full circle, values between = rounded corners.
-    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0)
+    // padding: 0..1 = fraction of the square's half-width reserved as transparent
+    // border per side; floored to whole pixels so small sizes drop to 0 naturally.
+    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0)
     {
-        var scale = Math.Min((double)size / source.Width, (double)size / source.Height);
+        var padPx = (int)(Math.Clamp(padding, 0, 1) * size);
+        var inner = Math.Max(1, size - 2 * padPx);
+
+        var scale = Math.Min((double)inner / source.Width, (double)inner / source.Height);
         var w = Math.Max(1, (int)Math.Round(source.Width * scale));
         var h = Math.Max(1, (int)Math.Round(source.Height * scale));
 
@@ -46,8 +51,8 @@ public static class IconFactory
 
         if (maskRadius > 0)
         {
-            var r = (float)(Math.Clamp(maskRadius, 0, 1) * size / 2.0);
-            canvas.ClipRoundRect(new SKRoundRect(new SKRect(0, 0, size, size), r, r), antialias: true);
+            var r = (float)(Math.Clamp(maskRadius, 0, 1) * inner / 2.0);
+            canvas.ClipRoundRect(new SKRoundRect(new SKRect(padPx, padPx, padPx + inner, padPx + inner), r, r), antialias: true);
         }
 
         var dx = (size - w) / 2f;

@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private bool _iconIsDebug;
     private CancellationTokenSource? _maskDebounceCts;
     private double _maskRadius;
+    private double _padding;
     private Task _rebuildChain = Task.CompletedTask;
     private CancellationTokenSource? _rebuildCts;
     private SKBitmap? _sourceImage;
@@ -93,6 +94,23 @@ public partial class MainWindow : Window
             DebouncedRebuild();
         };
 
+        _padding = Math.Clamp(_settings.Padding, 0, 0.1);
+        var paddingSlider = this.FindControl<Slider>("PaddingSlider")!;
+        var paddingValue = this.FindControl<TextBlock>("PaddingValue")!;
+        paddingSlider.Value = _padding * 100;
+        paddingValue.Text = ((int)Math.Round(_padding * 100)).ToString();
+        paddingSlider.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != RangeBase.ValueProperty)
+                return;
+            var v = paddingSlider.Value / 100.0;
+            paddingValue.Text = ((int)Math.Round(paddingSlider.Value)).ToString();
+            if (Math.Abs(v - _padding) < 0.0001)
+                return;
+            _padding = v;
+            DebouncedRebuild();
+        };
+
         topPanel.ItemsSource = _topThumbs;
         _smallPanel.ItemsSource = _smallThumbs;
         toggles.ItemsSource = _sizeToggles;
@@ -143,6 +161,7 @@ public partial class MainWindow : Window
             _settings.CustomSizes = _sizeToggles.Where(t => t.IsCustom).Select(t => t.Size).ToArray();
             _settings.ShowThumbBorders = borderToggle.IsChecked == true;
             _settings.MaskRadius = _maskRadius;
+            _settings.Padding = _padding;
             _settings.Save();
             _cts.Cancel();
             _rebuildCts?.Cancel();
@@ -358,7 +377,7 @@ public partial class MainWindow : Window
             {
                 if (all[i].Preview != null)
                     continue;
-                var (dbgSrc, dbgPreview) = RenderDebugFrame(all[i].Size, i, all.Count, _maskRadius);
+                var (dbgSrc, dbgPreview) = RenderDebugFrame(all[i].Size, i, all.Count, _maskRadius, _padding);
                 all[i].Fill(dbgSrc, dbgPreview);
             }
         }
@@ -367,7 +386,7 @@ public partial class MainWindow : Window
             var fillTasks = toFill.Select(thumb => Task.Run(async () =>
             {
                 ct.ThrowIfCancellationRequested();
-                var resized = IconFactory.ResizePadded(source, thumb.Size, _maskRadius);
+                var resized = IconFactory.ResizePadded(source, thumb.Size, _maskRadius, _padding);
                 var preview = IconThumb.ToAvaloniaBitmap(resized);
                 if (ct.IsCancellationRequested)
                 {
@@ -476,21 +495,23 @@ public partial class MainWindow : Window
         _trayIcon?.IsVisible = false;
     }
 
-    private static (SKBitmap src, Bitmap preview) RenderDebugFrame(int size, int index, int total, double maskRadius)
+    private static (SKBitmap src, Bitmap preview) RenderDebugFrame(int size, int index, int total, double maskRadius, double padding)
     {
         var bg = IntenseColorFor(index, total);
         var pixelSize = new PixelSize(size, size);
         var rtb = new RenderTargetBitmap(pixelSize, new Vector(96, 96));
+        var padPx = (int)(Math.Clamp(padding, 0, 1) * size);
+        var innerRect = new Rect(padPx, padPx, Math.Max(1, size - 2 * padPx), Math.Max(1, size - 2 * padPx));
         using (var ctx = rtb.CreateDrawingContext())
         {
             IDisposable? clip = null;
             if (maskRadius > 0)
             {
-                var r = Math.Clamp(maskRadius, 0, 1) * size / 2.0;
-                clip = ctx.PushGeometryClip(new RectangleGeometry(new Rect(0, 0, size, size), r, r));
+                var r = Math.Clamp(maskRadius, 0, 1) * innerRect.Width / 2.0;
+                clip = ctx.PushGeometryClip(new RectangleGeometry(innerRect, r, r));
             }
 
-            ctx.FillRectangle(new SolidColorBrush(bg), new Rect(0, 0, size, size));
+            ctx.FillRectangle(new SolidColorBrush(bg), innerRect);
             var label = size.ToString();
             var fontSize = Math.Max(8, size * 0.65);
             var text = new FormattedText(
@@ -732,7 +753,7 @@ public partial class MainWindow : Window
             var newImg = ImageLoader.TryLoad(path);
             if (newImg == null)
                 return;
-            var resized = IconFactory.ResizePadded(newImg, thumb.Size, _maskRadius);
+            var resized = IconFactory.ResizePadded(newImg, thumb.Size, _maskRadius, _padding);
             newImg.Dispose();
             var col = CollectionFor(thumb.Size);
             var idx = col.IndexOf(thumb);
@@ -821,7 +842,7 @@ public partial class MainWindow : Window
             var img = ImageLoader.TryLoad(file.Path.LocalPath);
             if (img == null)
                 return;
-            var resized = IconFactory.ResizePadded(img, thumb.Size, _maskRadius);
+            var resized = IconFactory.ResizePadded(img, thumb.Size, _maskRadius, _padding);
             img.Dispose();
             var col = CollectionFor(thumb.Size);
             var idx = col.IndexOf(thumb);
