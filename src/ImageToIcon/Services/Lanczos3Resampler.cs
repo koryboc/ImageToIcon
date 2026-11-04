@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.InteropServices;
 using SkiaSharp;
 
@@ -18,109 +19,123 @@ public static class Lanczos3Resampler
         var srcW = source.Width;
         var srcH = source.Height;
 
-        var premul = ReadPremulFloat(source);
+        // Normalize to BGRA8888/Premul once; skip if already matching.
+        SKBitmap? converted = null;
+        SKBitmap src;
+        if (source.ColorType == SKColorType.Bgra8888 && source.AlphaType == SKAlphaType.Premul)
+        {
+            src = source;
+        }
+        else
+        {
+            converted = new SKBitmap(new SKImageInfo(srcW, srcH, SKColorType.Bgra8888, SKAlphaType.Premul));
+            using (var canvas = new SKCanvas(converted))
+            {
+                canvas.Clear(SKColors.Transparent);
+                using var img = SKImage.FromBitmap(source);
+                canvas.DrawImage(img, 0, 0);
+            }
 
-        var xw = PrecomputeWeights(srcW, targetW);
-        var yw = PrecomputeWeights(srcH, targetH);
+            src = converted;
+        }
 
-        // Horizontal pass: srcW -> targetW, keep srcH rows.
-        var intermediate = new float[(long)targetW * srcH * 4];
+        try
+        {
+            var xw = PrecomputeWeights(srcW, targetW);
+            var yw = PrecomputeWeights(srcH, targetH);
+
+            var intermediateLen = checked(targetW * srcH * 4);
+            var intermediate = ArrayPool<float>.Shared.Rent(intermediateLen);
+            var interHandle = GCHandle.Alloc(intermediate, GCHandleType.Pinned);
+            try
+            {
+                var interAddr = interHandle.AddrOfPinnedObject();
+                HorizontalPass(src, srcW, srcH, targetW, xw, interAddr);
+                return VerticalPass(interAddr, targetW, srcH, targetH, yw);
+            }
+            finally
+            {
+                interHandle.Free();
+                ArrayPool<float>.Shared.Return(intermediate);
+            }
+        }
+        finally
+        {
+            converted?.Dispose();
+        }
+    }
+
+    private unsafe static void HorizontalPass(SKBitmap src, int srcW, int srcH, int targetW, ContributionRow[] xw, IntPtr interAddr)
+    {
+        var srcAddr = src.GetPixels(out _);
+        var srcStride = src.RowBytes;
+
         Parallel.For(0, srcH, y =>
         {
-            var srcRow = (long)y * srcW * 4;
-            var dstRow = (long)y * targetW * 4;
+            var rowPtr = (byte*)srcAddr + (long)y * srcStride;
+            var dstRow = (float*)interAddr + (long)y * targetW * 4;
             for (var x = 0; x < targetW; x++)
             {
                 var w = xw[x];
+                var weights = w.Weights;
                 float b = 0, g = 0, r = 0, a = 0;
-                for (var k = 0; k < w.Count; k++)
+                for (var k = 0; k < weights.Length; k++)
                 {
                     var sx = w.Start + k;
                     if (sx < 0) sx = 0;
                     else if (sx >= srcW) sx = srcW - 1;
-                    var off = srcRow + sx * 4;
-                    var wk = w.Weights[k];
-                    b += premul[off] * wk;
-                    g += premul[off + 1] * wk;
-                    r += premul[off + 2] * wk;
-                    a += premul[off + 3] * wk;
+                    var p = rowPtr + sx * 4;
+                    var wk = weights[k];
+                    b += p[0] * wk;
+                    g += p[1] * wk;
+                    r += p[2] * wk;
+                    a += p[3] * wk;
                 }
 
                 var o = dstRow + x * 4;
-                intermediate[o] = b;
-                intermediate[o + 1] = g;
-                intermediate[o + 2] = r;
-                intermediate[o + 3] = a;
+                o[0] = b;
+                o[1] = g;
+                o[2] = r;
+                o[3] = a;
             }
         });
+    }
 
-        // Vertical pass: srcH -> targetH, width stays targetW.
-        var result = new byte[(long)targetW * targetH * 4];
+    private unsafe static SKBitmap VerticalPass(IntPtr interAddr, int targetW, int srcH, int targetH, ContributionRow[] yw)
+    {
+        var info = new SKImageInfo(targetW, targetH, SKColorType.Bgra8888, SKAlphaType.Premul);
+        var bmp = new SKBitmap(info);
+        var dstAddr = bmp.GetPixels(out _);
+        var dstStride = bmp.RowBytes;
+
         Parallel.For(0, targetH, y =>
         {
             var w = yw[y];
-            var dstRow = (long)y * targetW * 4;
+            var weights = w.Weights;
+            var rowPtr = (byte*)dstAddr + (long)y * dstStride;
             for (var x = 0; x < targetW; x++)
             {
                 float b = 0, g = 0, r = 0, a = 0;
-                for (var k = 0; k < w.Count; k++)
+                for (var k = 0; k < weights.Length; k++)
                 {
                     var sy = w.Start + k;
                     if (sy < 0) sy = 0;
                     else if (sy >= srcH) sy = srcH - 1;
-                    var off = (long)sy * targetW * 4 + x * 4;
-                    var wk = w.Weights[k];
-                    b += intermediate[off] * wk;
-                    g += intermediate[off + 1] * wk;
-                    r += intermediate[off + 2] * wk;
-                    a += intermediate[off + 3] * wk;
+                    var p = (float*)interAddr + ((long)sy * targetW + x) * 4;
+                    var wk = weights[k];
+                    b += p[0] * wk;
+                    g += p[1] * wk;
+                    r += p[2] * wk;
+                    a += p[3] * wk;
                 }
 
-                var o = dstRow + x * 4;
-                result[o] = ToByte(b);
-                result[o + 1] = ToByte(g);
-                result[o + 2] = ToByte(r);
-                result[o + 3] = ToByte(a);
+                var o = rowPtr + x * 4;
+                o[0] = ToByte(b);
+                o[1] = ToByte(g);
+                o[2] = ToByte(r);
+                o[3] = ToByte(a);
             }
         });
-
-        return BuildSkBitmap(result, targetW, targetH);
-    }
-
-    private static float[] ReadPremulFloat(SKBitmap source)
-    {
-        var w = source.Width;
-        var h = source.Height;
-        var buffer = new float[(long)w * h * 4];
-
-        // Draw source into a known-layout Bgra8888/Premul bitmap. SKCanvas handles both
-        // the color-type conversion (any source color type -> BGRA) and the alpha-type
-        // conversion (unpremul -> premul) in a single pass.
-        using var premul = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
-        using (var canvas = new SKCanvas(premul))
-        {
-            canvas.Clear(SKColors.Transparent);
-            using var img = SKImage.FromBitmap(source);
-            canvas.DrawImage(img, 0, 0);
-        }
-
-        var pixels = premul.GetPixelSpan();
-        for (long i = 0; i < pixels.Length; i++)
-            buffer[i] = pixels[(int)i];
-        return buffer;
-    }
-
-    private static SKBitmap BuildSkBitmap(byte[] bgraPremul, int w, int h)
-    {
-        var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
-        var bmp = new SKBitmap(info);
-        var handle = GCHandle.Alloc(bgraPremul, GCHandleType.Pinned);
-        if (!bmp.InstallPixels(info, handle.AddrOfPinnedObject(), info.RowBytes, (_, _) => handle.Free()))
-        {
-            handle.Free();
-            bmp.Dispose();
-            throw new InvalidOperationException("Failed to install pixels on SKBitmap.");
-        }
 
         return bmp;
     }
@@ -181,6 +196,5 @@ public static class Lanczos3Resampler
     {
         public readonly int Start = start;
         public readonly float[] Weights = weights;
-        public int Count => Weights.Length;
     }
 }

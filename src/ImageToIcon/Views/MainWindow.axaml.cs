@@ -378,7 +378,7 @@ public partial class MainWindow : Window
                 if (all[i].Preview != null)
                     continue;
                 var (dbgSrc, dbgPreview) = RenderDebugFrame(all[i].Size, i, all.Count, _maskRadius, _padding);
-                all[i].Fill(dbgSrc, dbgPreview);
+                all[i].Fill(dbgSrc, dbgPreview, true);
             }
         }
         else
@@ -404,7 +404,7 @@ public partial class MainWindow : Window
                         return;
                     }
 
-                    thumb.Fill(resized, preview);
+                    thumb.Fill(resized, preview, false);
                 }, DispatcherPriority.Background);
             }, ct)).ToArray();
 
