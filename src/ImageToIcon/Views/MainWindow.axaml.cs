@@ -71,7 +71,7 @@ public partial class MainWindow : Window
         {
             _debugPreview = debugToggle.IsChecked == true;
             openBtn.IsEnabled = !_debugPreview;
-            RebuildThumbs();
+            RebuildThumbs(true);
         };
 
         topPanel.ItemsSource = _topThumbs;
@@ -158,7 +158,7 @@ public partial class MainWindow : Window
             // ignored
         }
 
-        RebuildThumbs();
+        RebuildThumbs(true);
     }
 
     private async void LoadFromPath(string path)
@@ -173,7 +173,7 @@ public partial class MainWindow : Window
             _sourceImage = img;
             _sourceName = Path.GetFileNameWithoutExtension(path);
             UpdateAvailability();
-            RebuildThumbs();
+            RebuildThumbs(true);
         }
         catch
         {
@@ -237,12 +237,30 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RebuildThumbs()
+    private void RebuildThumbs(bool fullRefill = false)
     {
-        _rebuildChain = RebuildThumbsChainedAsync(_rebuildChain);
+        _rebuildChain = RebuildThumbsChainedAsync(_rebuildChain, fullRefill);
     }
 
-    private async Task RebuildThumbsChainedAsync(Task previous)
+    private static void SyncThumbCollection(ObservableCollection<IconThumb> col, List<int> desired)
+    {
+        for (var i = col.Count - 1; i >= 0; i--)
+        {
+            if (desired.Contains(col[i].Size))
+                continue;
+            col[i].DisposeContent();
+            col.RemoveAt(i);
+        }
+
+        for (var i = 0; i < desired.Count; i++)
+        {
+            if (i < col.Count && col[i].Size == desired[i])
+                continue;
+            col.Insert(i, new IconThumb(desired[i]));
+        }
+    }
+
+    private async Task RebuildThumbsChainedAsync(Task previous, bool fullRefill)
     {
         if (_rebuildCts != null)
             await _rebuildCts.CancelAsync();
@@ -259,55 +277,57 @@ public partial class MainWindow : Window
         _rebuildCts = cts;
         var ct = cts.Token;
 
-        foreach (var t in _topThumbs.Concat(_smallThumbs))
-            t.DisposeContent();
-
-        _topThumbs.Clear();
-        _smallThumbs.Clear();
-        _smallPanel?.MaxHeight = double.PositiveInfinity;
-
         var source = _sourceImage;
         if (source == null)
         {
+            foreach (var t in _topThumbs.Concat(_smallThumbs))
+                t.DisposeContent();
+            _topThumbs.Clear();
+            _smallThumbs.Clear();
+            _smallPanel?.MaxHeight = double.PositiveInfinity;
             Opacity = 1;
             return;
         }
 
-        var maxDim = Math.Max(source.Width, source.Height);
-        var sizes = _sizeToggles
-                    .Where(t => t is { IsChecked: true, IsAvailable: true })
-                    .Select(t => t.Size)
-                    .Where(s => s <= maxDim)
-                    .OrderByDescending(s => s)
-                    .ToList();
+        if (fullRefill)
+            foreach (var t in _topThumbs.Concat(_smallThumbs))
+                t.DisposeContent();
 
-        // Place empty placeholders first so the layout (columns, cap, window
-        // size) resolves immediately; fill each with its resized bitmap as
-        // the background work completes.
-        var thumbs = new List<IconThumb>(sizes.Count);
-        foreach (var size in sizes)
+        var maxDim = Math.Max(source.Width, source.Height);
+        var desired = _sizeToggles
+                      .Where(t => t is { IsChecked: true, IsAvailable: true })
+                      .Select(t => t.Size)
+                      .Where(s => s <= maxDim)
+                      .OrderByDescending(s => s)
+                      .ToList();
+
+        SyncThumbCollection(_topThumbs, desired.Where(s => s >= 256).ToList());
+        SyncThumbCollection(_smallThumbs, desired.Where(s => s < 256).ToList());
+
+        if (_smallPanel != null)
         {
-            var thumb = new IconThumb(size);
-            thumbs.Add(thumb);
-            CollectionFor(size).Add(thumb);
-            if (_smallPanel == null)
-                continue;
             var topSize = _topThumbs.FirstOrDefault()?.Size;
-            if (topSize != null)
-                _smallPanel.MaxHeight = ComputeSmallColumnCap(topSize.Value);
+            _smallPanel.MaxHeight = topSize != null
+                ? ComputeSmallColumnCap(topSize.Value)
+                : double.PositiveInfinity;
         }
+
+        var toFill = _topThumbs.Concat(_smallThumbs).Where(t => t.Preview == null).ToList();
 
         if (_debugPreview)
         {
-            for (var i = 0; i < thumbs.Count; i++)
+            var all = _topThumbs.Concat(_smallThumbs).ToList();
+            for (var i = 0; i < all.Count; i++)
             {
-                var (dbgSrc, dbgPreview) = RenderDebugFrame(thumbs[i].Size, i, thumbs.Count);
-                thumbs[i].Fill(dbgSrc, dbgPreview);
+                if (all[i].Preview != null)
+                    continue;
+                var (dbgSrc, dbgPreview) = RenderDebugFrame(all[i].Size, i, all.Count);
+                all[i].Fill(dbgSrc, dbgPreview);
             }
         }
         else
         {
-            var fillTasks = thumbs.Select(thumb => Task.Run(async () =>
+            var fillTasks = toFill.Select(thumb => Task.Run(async () =>
             {
                 ct.ThrowIfCancellationRequested();
                 var resized = IconFactory.ResizePadded(source, thumb.Size);
