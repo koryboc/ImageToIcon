@@ -33,6 +33,8 @@ public partial class MainWindow : Window
     private readonly Button _updateBtn;
     private bool _debugPreview;
     private bool _iconIsDebug;
+    private CancellationTokenSource? _maskDebounceCts;
+    private double _maskRadius;
     private Task _rebuildChain = Task.CompletedTask;
     private CancellationTokenSource? _rebuildCts;
     private SKBitmap? _sourceImage;
@@ -72,6 +74,23 @@ public partial class MainWindow : Window
             _debugPreview = debugToggle.IsChecked == true;
             openBtn.IsEnabled = !_debugPreview;
             RebuildThumbs(true);
+        };
+
+        _maskRadius = Math.Clamp(_settings.MaskRadius, 0, 1);
+        var maskSlider = this.FindControl<Slider>("MaskSlider")!;
+        var maskValue = this.FindControl<TextBlock>("MaskValue")!;
+        maskSlider.Value = _maskRadius * 100;
+        maskValue.Text = ((int)Math.Round(_maskRadius * 100)).ToString();
+        maskSlider.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != RangeBase.ValueProperty)
+                return;
+            var v = maskSlider.Value / 100.0;
+            maskValue.Text = ((int)Math.Round(maskSlider.Value)).ToString();
+            if (Math.Abs(v - _maskRadius) < 0.0001)
+                return;
+            _maskRadius = v;
+            DebouncedRebuild();
         };
 
         topPanel.ItemsSource = _topThumbs;
@@ -123,6 +142,7 @@ public partial class MainWindow : Window
             _settings.SelectedSizes = _sizeToggles.Where(t => t.IsChecked).Select(t => t.Size).ToArray();
             _settings.CustomSizes = _sizeToggles.Where(t => t.IsCustom).Select(t => t.Size).ToArray();
             _settings.ShowThumbBorders = borderToggle.IsChecked == true;
+            _settings.MaskRadius = _maskRadius;
             _settings.Save();
             _cts.Cancel();
             _rebuildCts?.Cancel();
@@ -242,6 +262,23 @@ public partial class MainWindow : Window
         _rebuildChain = RebuildThumbsChainedAsync(_rebuildChain, fullRefill);
     }
 
+    private void DebouncedRebuild()
+    {
+        _maskDebounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _maskDebounceCts = cts;
+        _ = Task.Delay(120, cts.Token).ContinueWith(t =>
+        {
+            if (t.IsCanceled)
+                return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!cts.IsCancellationRequested)
+                    RebuildThumbs(true);
+            });
+        }, TaskScheduler.Default);
+    }
+
     private static void SyncThumbCollection(ObservableCollection<IconThumb> col, List<int> desired)
     {
         for (var i = col.Count - 1; i >= 0; i--)
@@ -321,7 +358,7 @@ public partial class MainWindow : Window
             {
                 if (all[i].Preview != null)
                     continue;
-                var (dbgSrc, dbgPreview) = RenderDebugFrame(all[i].Size, i, all.Count);
+                var (dbgSrc, dbgPreview) = RenderDebugFrame(all[i].Size, i, all.Count, _maskRadius);
                 all[i].Fill(dbgSrc, dbgPreview);
             }
         }
@@ -330,7 +367,7 @@ public partial class MainWindow : Window
             var fillTasks = toFill.Select(thumb => Task.Run(async () =>
             {
                 ct.ThrowIfCancellationRequested();
-                var resized = IconFactory.ResizePadded(source, thumb.Size);
+                var resized = IconFactory.ResizePadded(source, thumb.Size, _maskRadius);
                 var preview = IconThumb.ToAvaloniaBitmap(resized);
                 if (ct.IsCancellationRequested)
                 {
@@ -439,13 +476,20 @@ public partial class MainWindow : Window
         _trayIcon?.IsVisible = false;
     }
 
-    private static (SKBitmap src, Bitmap preview) RenderDebugFrame(int size, int index, int total)
+    private static (SKBitmap src, Bitmap preview) RenderDebugFrame(int size, int index, int total, double maskRadius)
     {
         var bg = IntenseColorFor(index, total);
         var pixelSize = new PixelSize(size, size);
         var rtb = new RenderTargetBitmap(pixelSize, new Vector(96, 96));
         using (var ctx = rtb.CreateDrawingContext())
         {
+            IDisposable? clip = null;
+            if (maskRadius > 0)
+            {
+                var r = Math.Clamp(maskRadius, 0, 1) * size / 2.0;
+                clip = ctx.PushGeometryClip(new RectangleGeometry(new Rect(0, 0, size, size), r, r));
+            }
+
             ctx.FillRectangle(new SolidColorBrush(bg), new Rect(0, 0, size, size));
             var label = size.ToString();
             var fontSize = Math.Max(8, size * 0.65);
@@ -473,6 +517,7 @@ public partial class MainWindow : Window
                 (size - text.Width) / 2,
                 (size - text.Height) / 2);
             ctx.DrawText(text, pos);
+            clip?.Dispose();
         }
 
         using var ms = new MemoryStream();
@@ -687,7 +732,7 @@ public partial class MainWindow : Window
             var newImg = ImageLoader.TryLoad(path);
             if (newImg == null)
                 return;
-            var resized = IconFactory.ResizePadded(newImg, thumb.Size);
+            var resized = IconFactory.ResizePadded(newImg, thumb.Size, _maskRadius);
             newImg.Dispose();
             var col = CollectionFor(thumb.Size);
             var idx = col.IndexOf(thumb);
@@ -776,7 +821,7 @@ public partial class MainWindow : Window
             var img = ImageLoader.TryLoad(file.Path.LocalPath);
             if (img == null)
                 return;
-            var resized = IconFactory.ResizePadded(img, thumb.Size);
+            var resized = IconFactory.ResizePadded(img, thumb.Size, _maskRadius);
             img.Dispose();
             var col = CollectionFor(thumb.Size);
             var idx = col.IndexOf(thumb);

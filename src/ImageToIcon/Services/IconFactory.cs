@@ -18,20 +18,21 @@ public static class IconFactory
         256, 48, 32, 24, 16
     ];
 
-    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes)
+    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0)
     {
         var maxDim = Math.Max(source.Width, source.Height);
         foreach (var s in sizes.OrderByDescending(x => x))
         {
             if (s > maxDim || s < MinSize || s > MaxSize) continue;
-            yield return ResizePadded(source, s);
+            yield return ResizePadded(source, s, maskRadius);
         }
     }
 
     // Aspect-fit the source into a square of `size`, centered on transparent background.
     // Uses a separable Lanczos3 resampler to match the quality of ImageSharp's
     // KnownResamplers.Lanczos3 (previously used before the SkiaSharp migration).
-    public static SKBitmap ResizePadded(SKBitmap source, int size)
+    // maskRadius: 0 = no mask, 1 = full circle, values between = rounded corners.
+    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0)
     {
         var scale = Math.Min((double)size / source.Width, (double)size / source.Height);
         var w = Math.Max(1, (int)Math.Round(source.Width * scale));
@@ -42,6 +43,13 @@ public static class IconFactory
         var result = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
         using var canvas = new SKCanvas(result);
         canvas.Clear(SKColors.Transparent);
+
+        if (maskRadius > 0)
+        {
+            var r = (float)(Math.Clamp(maskRadius, 0, 1) * size / 2.0);
+            canvas.ClipRoundRect(new SKRoundRect(new SKRect(0, 0, size, size), r, r), antialias: true);
+        }
+
         var dx = (size - w) / 2f;
         var dy = (size - h) / 2f;
         using var image = SKImage.FromBitmap(resized);
