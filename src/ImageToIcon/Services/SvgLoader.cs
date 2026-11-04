@@ -1,5 +1,3 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using SkiaSharp;
 using Svg.Skia;
 
@@ -14,7 +12,7 @@ public static class SvgLoader
         return Extensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static Image<Rgba32>? TryLoad(string path)
+    public static SKBitmap? TryLoad(string path)
     {
         try
         {
@@ -27,7 +25,7 @@ public static class SvgLoader
         }
     }
 
-    public static Image<Rgba32>? TryLoad(Stream stream)
+    public static SKBitmap? TryLoad(Stream stream)
     {
         try
         {
@@ -45,20 +43,14 @@ public static class SvgLoader
             var w = Math.Max(1, (int)Math.Round(bounds.Width * scale));
             var h = Math.Max(1, (int)Math.Round(bounds.Height * scale));
 
-            var info = new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-            using var surface = SKSurface.Create(info);
-            var canvas = surface.Canvas;
+            var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
+            var bmp = new SKBitmap(info);
+            using var canvas = new SKCanvas(bmp);
             canvas.Clear(SKColors.Transparent);
             canvas.Scale(scale);
             canvas.DrawPicture(pic);
             canvas.Flush();
-
-            using var image = surface.Snapshot();
-            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-            using var ms = new MemoryStream();
-            data.SaveTo(ms);
-            ms.Position = 0;
-            return Image.Load<Rgba32>(ms);
+            return bmp;
         }
         catch
         {

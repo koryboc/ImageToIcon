@@ -5,8 +5,10 @@
     <assembly fullname="Avalonia.Desktop" preserve="all"/>
     <assembly fullname="Avalonia.Themes.Fluent" preserve="all"/>
     <assembly fullname="Avalonia.Fonts.Inter" preserve="all"/>
-    <assembly fullname="SixLabors.ImageSharp" preserve="all"/>
+    <assembly fullname="SkiaSharp" preserve="all"/>
     <assembly fullname="Svg.Model" preserve="all"/>
     <assembly fullname="Svg.Skia" preserve="all"/>
+    <assembly fullname="Pfim" preserve="all"/>
+    <assembly fullname="BitMiracle.LibTiff.NET" preserve="all"/>
     <assembly fullname="ImageToIcon" preserve="all"/>
 </linker>

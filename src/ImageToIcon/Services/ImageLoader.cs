@@ -1,6 +1,5 @@
 using Avalonia.Platform.Storage;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 
 namespace ImageToIcon.Services;
 
@@ -38,8 +37,8 @@ public static class ImageLoader
         return SupportedExtensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// Builds file picker filters: "All supported" first (preselected), then one entry per
-    /// category, and finally the OS "All files" option.
+    // Builds file picker filters: "All supported" first (preselected), then one entry per
+    // category, and finally the OS "All files" option.
     public static IReadOnlyList<FilePickerFileType> BuildFilePickerFilters()
     {
         var filters = new List<FilePickerFileType>
@@ -55,7 +54,7 @@ public static class ImageLoader
         return filters;
     }
 
-    public static Image<Rgba32>? TryLoad(string path)
+    public static SKBitmap? TryLoad(string path)
     {
         try
         {
@@ -63,7 +62,7 @@ public static class ImageLoader
                 return null;
             if (IconReader.IsSupported(path))
                 return IconReader.TryLoad(path);
-            return SvgLoader.IsSupported(path) ? SvgLoader.TryLoad(path) : Image.Load<Rgba32>(path);
+            return SvgLoader.IsSupported(path) ? SvgLoader.TryLoad(path) : RasterDecoder.TryLoad(path);
         }
         catch
         {

@@ -37,8 +37,9 @@
         <PackageReference Include="Avalonia.Desktop" Version="12.1.4"/>
         <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4"/>
         <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4"/>
-        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12"/>
-        <PackageReference Include="Svg.Skia" Version="5.2.3"/>
+        <PackageReference Include="BitMiracle.LibTiff.NET" Version="2.4.660"/>
+        <PackageReference Include="Pfim" Version="0.11.4"/>
+        <PackageReference Include="Svg.Skia" Version="5.1.1"/>
         <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2"/>
     </ItemGroup>
 

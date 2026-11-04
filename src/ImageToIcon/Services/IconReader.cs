@@ -2,14 +2,12 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 
 namespace ImageToIcon.Services;
 
-/// Reads .ico files and PE containers (.exe/.dll) and returns the largest embedded frame as an
-/// <see cref="Image{Rgba32}" />
-/// . PE structural navigation ported from Apportia's PeReader.
+// Reads .ico files and PE containers (.exe/.dll) and returns the largest embedded frame as an
+// SKBitmap. PE structural navigation ported from Apportia's PeReader.
 public static class IconReader
 {
     public static readonly Dictionary<string, string[]> Categories = new()
@@ -26,7 +24,7 @@ public static class IconReader
         return SupportedExtensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static Image<Rgba32>? TryLoad(string path)
+    public static SKBitmap? TryLoad(string path)
     {
         try
         {
@@ -41,7 +39,7 @@ public static class IconReader
         }
     }
 
-    private static Image<Rgba32>? DecodeLargestFrame(byte[] icoBytes)
+    private static SKBitmap? DecodeLargestFrame(byte[] icoBytes)
     {
         using var ms = new MemoryStream(icoBytes);
         using var br = new BinaryReader(ms);
@@ -70,35 +68,30 @@ public static class IconReader
             var data = br.ReadBytes((int)size);
             if (data.Length == 0) continue;
 
-            // PNG entries decode directly via ImageSharp — no Avalonia round-trip needed.
+            // PNG entries decode directly via Skia — no Avalonia round-trip needed.
             if (IsPng(data))
             {
-                try
-                {
-                    return Image.Load<Rgba32>(data);
-                }
-                catch
-                {
-                    continue;
-                }
+                var decoded = SKBitmap.Decode(data);
+                if (decoded != null) return decoded;
+                continue;
             }
 
             // Classic DIB entries: wrap in a single-entry ICO and let Avalonia (SkiaSharp) decode
             // — same trick used in Apportia's PeReader. Handles 1/4/8/24/32 bpp with AND mask.
-            var decoded = TryDecodeDibViaAvalonia(data, w, h);
-            if (decoded != null) return decoded;
+            var dib = TryDecodeDibViaAvalonia(data, w, h);
+            if (dib != null) return dib;
         }
 
         return null;
     }
 
-    private static Image<Rgba32>? TryDecodeDibViaAvalonia(byte[] dibData, byte width, byte height)
+    private static SKBitmap? TryDecodeDibViaAvalonia(byte[] dibData, byte width, byte height)
     {
         try
         {
             using var ms = new MemoryStream(WrapDibInIco(dibData, width, height));
             using var bmp = new Bitmap(ms);
-            return BitmapToRgba32(bmp);
+            return BitmapToSkia(bmp);
         }
         catch
         {
@@ -106,7 +99,7 @@ public static class IconReader
         }
     }
 
-    private static Image<Rgba32> BitmapToRgba32(Bitmap bmp)
+    private static SKBitmap BitmapToSkia(Bitmap bmp)
     {
         var w = bmp.PixelSize.Width;
         var h = bmp.PixelSize.Height;
@@ -123,29 +116,31 @@ public static class IconReader
             handle.Free();
         }
 
-        var isPremul = bmp.AlphaFormat == AlphaFormat.Premul;
-        var img = new Image<Rgba32>(w, h);
-        for (var y = 0; y < h; y++)
+        // Avalonia returns BGRA. If premultiplied, unpremultiply so downstream resize sampling
+        // treats color as straight alpha.
+        if (bmp.AlphaFormat == AlphaFormat.Premul)
         {
-            for (var x = 0; x < w; x++)
+            for (var i = 0; i < buffer.Length; i += 4)
             {
-                var i = y * stride + x * 4;
-                var b = buffer[i];
-                var g = buffer[i + 1];
-                var r = buffer[i + 2];
                 var a = buffer[i + 3];
-                if (isPremul && a is > 0 and < 255)
-                {
-                    r = (byte)Math.Min(255, r * 255 / a);
-                    g = (byte)Math.Min(255, g * 255 / a);
-                    b = (byte)Math.Min(255, b * 255 / a);
-                }
-
-                img[x, y] = new Rgba32(r, g, b, a);
+                if (a is 0 or 255) continue;
+                buffer[i] = (byte)Math.Min(255, buffer[i] * 255 / a);
+                buffer[i + 1] = (byte)Math.Min(255, buffer[i + 1] * 255 / a);
+                buffer[i + 2] = (byte)Math.Min(255, buffer[i + 2] * 255 / a);
             }
         }
 
-        return img;
+        var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        var result = new SKBitmap(info);
+        var pinned = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+        if (!result.InstallPixels(info, pinned.AddrOfPinnedObject(), info.RowBytes, (_, _) => pinned.Free()))
+        {
+            pinned.Free();
+            result.Dispose();
+            throw new InvalidOperationException("Failed to install pixels on SKBitmap.");
+        }
+
+        return result;
     }
 
     private static int Dim(byte v)

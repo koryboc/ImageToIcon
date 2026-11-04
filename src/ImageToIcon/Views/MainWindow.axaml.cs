@@ -14,17 +14,13 @@ using ImageToIcon.Models;
 using ImageToIcon.Platform;
 using ImageToIcon.Services;
 using ImageToIcon.Ui;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using SkiaSharp;
 using Color = Avalonia.Media.Color;
-using Image = SixLabors.ImageSharp.Image;
 using Point = Avalonia.Point;
-using Size = SixLabors.ImageSharp.Size;
 
 namespace ImageToIcon.Views;
 
-public partial class MainWindow : Window
+public class MainWindow : Window
 {
     private readonly CancellationTokenSource _cts = new();
     private readonly SelfUpdateCoordinator _selfUpdate;
@@ -38,7 +34,7 @@ public partial class MainWindow : Window
     private bool _iconIsDebug;
     private Task _rebuildChain = Task.CompletedTask;
     private CancellationTokenSource? _rebuildCts;
-    private Image<Rgba32>? _sourceImage;
+    private SKBitmap? _sourceImage;
     private string? _sourceName;
 
     private bool _suppressTopFrameSync;
@@ -308,18 +304,13 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            (Image<Rgba32> src, Bitmap preview) pair;
+            (SKBitmap src, Bitmap preview) pair;
             try
             {
                 pair = await Task.Run(() =>
                 {
                     ct.ThrowIfCancellationRequested();
-                    var resized = source.Clone(ctx => ctx.Resize(new ResizeOptions
-                    {
-                        Size = new Size(thumb.Size, thumb.Size),
-                        Mode = ResizeMode.Pad,
-                        Sampler = KnownResamplers.Lanczos3
-                    }));
+                    var resized = IconFactory.ResizePadded(source, thumb.Size);
                     ct.ThrowIfCancellationRequested();
                     return (resized, IconThumb.ToAvaloniaBitmap(resized));
                 }, ct);
@@ -349,7 +340,7 @@ public partial class MainWindow : Window
             var frames = _topThumbs.Concat(_smallThumbs)
                                    .Where(t => t.Source != null)
                                    .OrderByDescending(t => t.Size)
-                                   .Select(t => t.Source!.Clone(_ => { }))
+                                   .Select(t => IconFactory.Copy(t.Source!))
                                    .ToList();
             if (frames.Count == 0)
                 return;
@@ -415,7 +406,7 @@ public partial class MainWindow : Window
         _trayIcon?.IsVisible = false;
     }
 
-    private static (Image<Rgba32> src, Bitmap preview) RenderDebugFrame(int size, int index, int total)
+    private static (SKBitmap src, Bitmap preview) RenderDebugFrame(int size, int index, int total)
     {
         var bg = IntenseColorFor(index, total);
         var pixelSize = new PixelSize(size, size);
@@ -454,7 +445,7 @@ public partial class MainWindow : Window
         using var ms = new MemoryStream();
         rtb.Save(ms, new PngBitmapEncoderOptions());
         var bytes = ms.ToArray();
-        var img = Image.Load<Rgba32>(bytes);
+        var img = SKBitmap.Decode(bytes) ?? throw new InvalidOperationException("Failed to decode debug frame.");
         var bmp = new Bitmap(new MemoryStream(bytes));
         rtb.Dispose();
         return (img, bmp);
@@ -620,7 +611,7 @@ public partial class MainWindow : Window
         var images = _topThumbs.Concat(_smallThumbs)
                                .Where(t => t.Source != null)
                                .OrderByDescending(t => t.Size)
-                               .Select(t => t.Source!.Clone(_ => { }));
+                               .Select(t => IconFactory.Copy(t.Source!));
         try
         {
             IconFactory.Save(images, file.Path.LocalPath);
@@ -663,12 +654,7 @@ public partial class MainWindow : Window
             var newImg = ImageLoader.TryLoad(path);
             if (newImg == null)
                 return;
-            var resized = newImg.Clone(ctx => ctx.Resize(new ResizeOptions
-            {
-                Size = new Size(thumb.Size, thumb.Size),
-                Mode = ResizeMode.Pad,
-                Sampler = KnownResamplers.Lanczos3
-            }));
+            var resized = IconFactory.ResizePadded(newImg, thumb.Size);
             newImg.Dispose();
             var col = CollectionFor(thumb.Size);
             var idx = col.IndexOf(thumb);
@@ -757,12 +743,7 @@ public partial class MainWindow : Window
             var img = ImageLoader.TryLoad(file.Path.LocalPath);
             if (img == null)
                 return;
-            var resized = img.Clone(ctx => ctx.Resize(new ResizeOptions
-            {
-                Size = new Size(thumb.Size, thumb.Size),
-                Mode = ResizeMode.Pad,
-                Sampler = KnownResamplers.Lanczos3
-            }));
+            var resized = IconFactory.ResizePadded(img, thumb.Size);
             img.Dispose();
             var col = CollectionFor(thumb.Size);
             var idx = col.IndexOf(thumb);
