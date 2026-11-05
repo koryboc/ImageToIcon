@@ -15,6 +15,19 @@ public class IconThumb(int size) : INotifyPropertyChanged
     public SKBitmap? Source { get; private set; }
     public Bitmap? Preview { get; private set; }
 
+    private bool _isPaddingDragging;
+    public bool IsPaddingDragging
+    {
+        get => _isPaddingDragging;
+        set
+        {
+            if (_isPaddingDragging == value)
+                return;
+            _isPaddingDragging = value;
+            Raise(nameof(IsPaddingDragging));
+        }
+    }
+
     public string SizeLabel => Size.ToString();
     public string TooltipText => $"{Size}x{Size}";
     public int DisplaySize => Size;

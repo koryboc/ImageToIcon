@@ -116,6 +116,10 @@ public partial class MainWindow : Window
         AttachSliderDragTracking(maskSlider);
         AttachSliderDragTracking(paddingSlider);
 
+        paddingSlider.AddHandler(PointerPressedEvent, (_, _) => SetPaddingDragHighlight(true), RoutingStrategies.Tunnel);
+        paddingSlider.AddHandler(PointerReleasedEvent, (_, _) => SetPaddingDragHighlight(false), RoutingStrategies.Tunnel);
+        paddingSlider.AddHandler(PointerCaptureLostEvent, (_, _) => SetPaddingDragHighlight(false), RoutingStrategies.Tunnel);
+
         topPanel.ItemsSource = _topThumbs;
         _smallPanel.ItemsSource = _smallThumbs;
         toggles.ItemsSource = _sizeToggles;
@@ -291,6 +295,12 @@ public partial class MainWindow : Window
         slider.AddHandler(PointerPressedEvent, (_, _) => _sliderDragging = true, RoutingStrategies.Tunnel);
         slider.AddHandler(PointerReleasedEvent, (_, _) => OnSliderReleased(), RoutingStrategies.Tunnel);
         slider.AddHandler(PointerCaptureLostEvent, (_, _) => OnSliderReleased(), RoutingStrategies.Tunnel);
+    }
+
+    private void SetPaddingDragHighlight(bool on)
+    {
+        foreach (var t in _topThumbs)
+            t.IsPaddingDragging = on;
     }
 
     private void OnSliderReleased()

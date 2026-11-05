@@ -120,6 +120,11 @@
                                StrokeDashArray="2,2"
                                IsHitTestVisible="False"
                                IsVisible="{Binding #BorderToggle.IsChecked}" />
+                    <Rectangle Stroke="Orange"
+                               StrokeThickness="1"
+                               StrokeDashArray="2,2"
+                               IsHitTestVisible="False"
+                               IsVisible="{Binding IsPaddingDragging}" />
                 </Grid>
                 <TextBlock Text="{Binding SizeLabel}"
                            Foreground="{DynamicResource AppThumbBorderBrush}"
