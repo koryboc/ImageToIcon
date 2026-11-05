@@ -25,17 +25,17 @@ public static class IconFactory
         256, 48, 32, 24, 16
     ];
 
-    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0)
+    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, SKColor? background = null)
     {
         var maxDim = Math.Max(source.Width, source.Height);
         foreach (var s in sizes.OrderByDescending(x => x))
         {
             if (s > maxDim || s < MinSize || s > MaxSize) continue;
-            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY);
+            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY, background);
         }
     }
 
-    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0)
+    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, SKColor? background = null)
     {
         var padPx = (int)(Math.Clamp(padding, 0, 1) * size);
         var inner = Math.Max(1, size - 2 * padPx);
@@ -72,7 +72,7 @@ public static class IconFactory
 
         var result = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
         using var canvas = new SKCanvas(result);
-        canvas.Clear(SKColors.Transparent);
+        canvas.Clear(background ?? SKColors.Transparent);
 
         if (maskRadius > 0)
         {
@@ -93,6 +93,42 @@ public static class IconFactory
     public static SKBitmap Copy(SKBitmap source)
     {
         return source.Copy() ?? throw new InvalidOperationException("Failed to copy SKBitmap.");
+    }
+
+    public static bool HasTransparency(SKBitmap? bmp)
+    {
+        if (bmp == null || bmp.AlphaType == SKAlphaType.Opaque)
+            return false;
+        using var pm = bmp.PeekPixels();
+        if (pm == null)
+            return false;
+        var span = pm.GetPixelSpan();
+        var info = bmp.Info;
+        var rowBytes = pm.RowBytes;
+        var w = info.Width;
+        var h = info.Height;
+
+        switch (info.ColorType)
+        {
+            case SKColorType.Bgra8888:
+            case SKColorType.Rgba8888:
+                for (var y = 0; y < h; y++)
+                {
+                    var row = span.Slice(y * rowBytes, w * 4);
+                    for (var x = 0; x < w; x++)
+                        if (row[x * 4 + 3] < 255)
+                            return true;
+                }
+
+                return false;
+            default:
+                using (var copy = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul)))
+                {
+                    if (!bmp.ScalePixels(copy, new SKSamplingOptions(SKFilterMode.Nearest)))
+                        return false;
+                    return HasTransparency(copy);
+                }
+        }
     }
 
     public static void Save(IEnumerable<SKBitmap> images, string path)

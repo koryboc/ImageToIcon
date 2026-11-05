@@ -10,14 +10,13 @@ namespace ImageToIcon.Models;
 
 public class IconThumb(int size) : INotifyPropertyChanged
 {
-    private bool _isFocused;
-    private bool _isPaddingDragging;
     public int Size { get; } = size;
 
     public SKBitmap? Source { get; private set; }
     public Bitmap? Preview { get; private set; }
 
     public SKBitmap? OverrideSource { get; private set; }
+    public bool OverrideHasTransparency { get; private set; }
     public double? MaskRadiusOverride { get; set; }
     public double? PaddingOverride { get; set; }
     public FitMode? FitModeOverride { get; set; }
@@ -33,24 +32,24 @@ public class IconThumb(int size) : INotifyPropertyChanged
 
     public bool IsFocused
     {
-        get => _isFocused;
+        get;
         set
         {
-            if (_isFocused == value)
+            if (field == value)
                 return;
-            _isFocused = value;
+            field = value;
             Raise(nameof(IsFocused));
         }
     }
 
     public bool IsPaddingDragging
     {
-        get => _isPaddingDragging;
+        get;
         set
         {
-            if (_isPaddingDragging == value)
+            if (field == value)
                 return;
-            _isPaddingDragging = value;
+            field = value;
             Raise(nameof(IsPaddingDragging));
         }
     }
@@ -100,6 +99,7 @@ public class IconThumb(int size) : INotifyPropertyChanged
     {
         var old = OverrideSource;
         OverrideSource = newSource;
+        OverrideHasTransparency = IconFactory.HasTransparency(newSource);
         Raise(nameof(OverrideSource));
         Raise(nameof(IsDecoupled));
         DeferDispose(old);
@@ -114,6 +114,7 @@ public class IconThumb(int size) : INotifyPropertyChanged
     {
         var old = OverrideSource;
         OverrideSource = null;
+        OverrideHasTransparency = false;
         MaskRadiusOverride = null;
         PaddingOverride = null;
         FitModeOverride = null;

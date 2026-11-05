@@ -25,6 +25,7 @@ namespace ImageToIcon.Views;
 public partial class MainWindow : Window
 {
     private const double PanThresholdPx = 4;
+    private readonly ToggleButton? _bgColorToggleCtrl;
     private readonly CancellationTokenSource _cts = new();
     private readonly Button? _fitModeButtonCtrl;
     private readonly TextBlock? _fitModeLabelCtrl;
@@ -39,12 +40,14 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<IconThumb> _smallThumbs = [];
     private readonly ObservableCollection<IconThumb> _topThumbs = [];
     private readonly Button _updateBtn;
+    private SKColor? _backgroundColor;
     private double _cropOffsetX;
     private double _cropOffsetY;
     private bool _debugPreview;
     private FitMode _fitMode;
     private IconThumb? _focusedThumb;
     private bool _iconIsDebug;
+    private Color _lastBackgroundColor = Colors.White;
     private CancellationTokenSource? _maskDebounceCts;
     private double _maskRadius;
     private double _padding;
@@ -64,6 +67,7 @@ public partial class MainWindow : Window
     private double _savedPadding;
 
     private bool _sliderDragging;
+    private bool _sourceHasTransparency;
     private SKBitmap? _sourceImage;
     private string? _sourceName;
     private bool _suppressTopFrameSync;
@@ -94,6 +98,10 @@ public partial class MainWindow : Window
         var toggles = this.FindControl<ItemsControl>("SizeToggles")!;
         var borderToggle = this.FindControl<ToggleButton>("BorderToggle")!;
         borderToggle.IsChecked = _settings.ShowThumbBorders;
+        var bgColorToggle = this.FindControl<ToggleButton>("BgColorToggle")!;
+        _bgColorToggleCtrl = bgColorToggle;
+        bgColorToggle.IsChecked = false;
+        bgColorToggle.Click += async (_, _) => await OnBgColorToggleClickAsync();
         var debugToggle = this.FindControl<ToggleButton>("DebugToggle")!;
         debugToggle.Click += (_, _) =>
         {
@@ -157,6 +165,7 @@ public partial class MainWindow : Window
                 _maskRadius = v;
             }
 
+            UpdateBgColorAvailability();
             DebouncedRebuild();
         };
 
@@ -185,6 +194,7 @@ public partial class MainWindow : Window
                 _padding = v;
             }
 
+            UpdateBgColorAvailability();
             DebouncedRebuild();
         };
 
@@ -299,6 +309,7 @@ public partial class MainWindow : Window
             if (_sourceImage != null)
             {
                 _sourceName = "icon";
+                _sourceHasTransparency = IconFactory.HasTransparency(_sourceImage);
                 UpdateAvailability();
             }
         }
@@ -321,6 +332,7 @@ public partial class MainWindow : Window
             _sourceImage?.Dispose();
             _sourceImage = img;
             _sourceName = Path.GetFileNameWithoutExtension(path);
+            _sourceHasTransparency = IconFactory.HasTransparency(img);
             UpdateAvailability();
             RebuildThumbs(true);
         }
@@ -352,6 +364,7 @@ public partial class MainWindow : Window
         foreach (var t in _sizeToggles)
             t.IsAvailable = t.Size <= maxDim;
         UpdateFitModeAvailability();
+        UpdateBgColorAvailability();
     }
 
     private void OnTogglePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -397,6 +410,58 @@ public partial class MainWindow : Window
         slider.AddHandler(PointerPressedEvent, (_, _) => _sliderDragging = true, RoutingStrategies.Tunnel);
         slider.AddHandler(PointerReleasedEvent, (_, _) => OnSliderReleased(), RoutingStrategies.Tunnel);
         slider.AddHandler(PointerCaptureLostEvent, (_, _) => OnSliderReleased(), RoutingStrategies.Tunnel);
+    }
+
+    private bool AnyTransparentSource()
+    {
+        if (_sourceHasTransparency) return true;
+        if (_maskRadius > 0 || _padding > 0) return true;
+        foreach (var t in _topThumbs.Concat(_smallThumbs))
+        {
+            if (t.OverrideHasTransparency) return true;
+            if ((t.MaskRadiusOverride ?? 0) > 0) return true;
+            if ((t.PaddingOverride ?? 0) > 0) return true;
+        }
+
+        return false;
+    }
+
+    private void UpdateBgColorAvailability()
+    {
+        if (_bgColorToggleCtrl == null)
+            return;
+        var any = AnyTransparentSource();
+        _bgColorToggleCtrl.IsEnabled = any;
+        if (!any && _backgroundColor.HasValue)
+        {
+            _backgroundColor = null;
+            _bgColorToggleCtrl.IsChecked = false;
+        }
+    }
+
+    private async Task OnBgColorToggleClickAsync()
+    {
+        if (_bgColorToggleCtrl == null)
+            return;
+        if (_backgroundColor.HasValue)
+        {
+            _backgroundColor = null;
+            _bgColorToggleCtrl.IsChecked = false;
+            RebuildThumbs(true);
+            return;
+        }
+
+        var picked = await BackgroundColorDialog.ShowAsync(this, _lastBackgroundColor);
+        if (picked == null)
+        {
+            _bgColorToggleCtrl.IsChecked = false;
+            return;
+        }
+
+        _lastBackgroundColor = picked.Value;
+        _backgroundColor = new SKColor(picked.Value.R, picked.Value.G, picked.Value.B, picked.Value.A);
+        _bgColorToggleCtrl.IsChecked = true;
+        RebuildThumbs(true);
     }
 
     private SKBitmap? EffectiveSourceForControls()
@@ -595,7 +660,7 @@ public partial class MainWindow : Window
             {
                 var (resized, preview) = await Task.Run(() =>
                 {
-                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy);
+                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, _backgroundColor);
                     var p = IconThumb.ToAvaloniaBitmap(r);
                     return (r, p);
                 }, ct);
@@ -629,6 +694,7 @@ public partial class MainWindow : Window
 
         SyncThumbCollection(_topThumbs, desired.Where(s => s >= 256).ToList());
         SyncThumbCollection(_smallThumbs, desired.Where(s => s < 256).ToList());
+        UpdateBgColorAvailability();
 
         if (_smallPanel != null)
         {
@@ -657,7 +723,7 @@ public partial class MainWindow : Window
             {
                 ct.ThrowIfCancellationRequested();
                 var thumbSource = SourceFor(thumb) ?? source;
-                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb));
+                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), _backgroundColor);
                 var preview = IconThumb.ToAvaloniaBitmap(resized);
                 if (ct.IsCancellationRequested)
                 {
@@ -1039,7 +1105,7 @@ public partial class MainWindow : Window
                 {
                     var src = SourceFor(t);
                     if (src != null)
-                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t)));
+                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), _backgroundColor));
                 }
             }
 
@@ -1092,6 +1158,7 @@ public partial class MainWindow : Window
             thumb.SetOverrideSource(newImg);
             thumb.DisposeContent();
             UpdateFitModeAvailability();
+            UpdateBgColorAvailability();
             RebuildThumbs();
             return;
         }
@@ -1269,6 +1336,7 @@ public partial class MainWindow : Window
             thumb.SetOverrideSource(img);
             thumb.DisposeContent();
             UpdateFitModeAvailability();
+            UpdateBgColorAvailability();
             RebuildThumbs();
         }
         catch
@@ -1286,6 +1354,7 @@ public partial class MainWindow : Window
             SetFocus(null);
         thumb.ClearOverrides();
         UpdateFitModeAvailability();
+        UpdateBgColorAvailability();
         RebuildThumbs(true);
     }
 

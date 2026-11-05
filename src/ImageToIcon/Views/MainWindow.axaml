@@ -48,6 +48,7 @@
         <Style Selector="ToggleButton.iconbtn">
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Height" Value="22" />
             <Setter Property="Padding" Value="4,3" />
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}" />
             <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrush}" />
@@ -70,17 +71,17 @@
             <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrushPressed}" />
             <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundPressed}" />
         </Style>
-        <Style Selector="ToggleButton.debugtoggle:checked /template/ ContentPresenter">
+        <Style Selector="ToggleButton.accenttoggle:checked /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppThumbBorderBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource AppThumbBorderBrush}" />
             <Setter Property="Foreground" Value="White" />
         </Style>
-        <Style Selector="ToggleButton.debugtoggle:checked:pointerover /template/ ContentPresenter">
+        <Style Selector="ToggleButton.accenttoggle:checked:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppThumbBorderBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource AppThumbBorderBrush}" />
             <Setter Property="Foreground" Value="White" />
         </Style>
-        <Style Selector="ToggleButton.debugtoggle:checked:pressed /template/ ContentPresenter">
+        <Style Selector="ToggleButton.accenttoggle:checked:pressed /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppThumbBorderBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource AppThumbBorderBrush}" />
             <Setter Property="Foreground" Value="White" />
@@ -202,7 +203,19 @@
                                        StrokeDashArray="2,2"
                                        Opacity="0.65" />
                         </ToggleButton>
-                        <ToggleButton x:Name="DebugToggle" Classes="iconbtn debugtoggle"
+                        <ToggleButton x:Name="BgColorToggle" Classes="iconbtn accenttoggle"
+                                      ToolTip.Tip="Fill transparent background with a solid color">
+                            <Grid Width="12" Height="12">
+                                <Ellipse Width="12" Height="12"
+                                         Stroke="{Binding #BgColorToggle.Foreground}"
+                                         StrokeThickness="1"
+                                         Opacity="0.65" />
+                                <Path Data="M 6,0 A 6,6 0 0 0 6,12 Z"
+                                      Fill="{Binding #BgColorToggle.Foreground}"
+                                      Opacity="0.65" />
+                            </Grid>
+                        </ToggleButton>
+                        <ToggleButton x:Name="DebugToggle" Classes="iconbtn accenttoggle"
                                       ToolTip.Tip="Replace frames with labeled size tiles&#x0a;so you can see which size the OS picks in each context">
                             <TextBlock Text="123" FontSize="9" FontWeight="Bold"
                                        Opacity="0.65"
@@ -225,7 +238,7 @@
                         <TextBlock x:Name="PaddingValue" Text="0" MinWidth="24"
                                    VerticalAlignment="Center" FontSize="11"
                                    Foreground="{DynamicResource AppSubTextBrush}" />
-                        <Button x:Name="FitModeButton" MinWidth="0" MinHeight="0" Padding="4,3"
+                        <Button x:Name="FitModeButton" MinWidth="0" MinHeight="0" Height="22" Padding="4,3"
                                 Background="{DynamicResource ButtonBackground}"
                                 BorderBrush="{DynamicResource ButtonBorderBrush}"
                                 Foreground="{DynamicResource ButtonForeground}"
