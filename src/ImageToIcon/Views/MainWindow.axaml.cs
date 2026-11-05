@@ -62,10 +62,12 @@ public partial class MainWindow : Window
     private Point _pressPoint;
     private Task _rebuildChain = Task.CompletedTask;
     private CancellationTokenSource? _rebuildCts;
+    private SKColor? _savedBackgroundColor;
     private double _savedCropOffsetX;
     private double _savedCropOffsetY;
     private FitMode _savedFitMode;
     private IconThumb? _savedFocusedThumb;
+    private ShadowOutlineState? _savedFxState;
     private double _savedMaskRadius;
     private double _savedPadding;
 
@@ -111,32 +113,58 @@ public partial class MainWindow : Window
         debugToggle.Click += (_, _) =>
         {
             var next = debugToggle.IsChecked == true;
-            if (next && !_debugPreview)
+            switch (next)
             {
-                _savedFocusedThumb = _focusedThumb;
-                SetFocus(null);
-                _savedMaskRadius = _maskRadius;
-                _savedPadding = _padding;
-                _savedFitMode = _fitMode;
-                _savedCropOffsetX = _cropOffsetX;
-                _savedCropOffsetY = _cropOffsetY;
-            }
-            else if (!next && _debugPreview)
-            {
-                _maskRadius = _savedMaskRadius;
-                _padding = _savedPadding;
-                _fitMode = _savedFitMode;
-                _cropOffsetX = _savedCropOffsetX;
-                _cropOffsetY = _savedCropOffsetY;
-                _maskSliderCtrl?.Value = _maskRadius * 100;
-                _maskValueCtrl?.Text = ((int)Math.Round(_maskRadius * 100)).ToString();
-                _paddingSliderCtrl?.Value = _padding * 100;
-                _paddingValueCtrl?.Text = ((int)Math.Round(_padding * 100)).ToString();
-                UpdateFitModeLabel();
-                if (_savedFocusedThumb != null
-                    && (_topThumbs.Contains(_savedFocusedThumb) || _smallThumbs.Contains(_savedFocusedThumb)))
-                    SetFocus(_savedFocusedThumb);
-                _savedFocusedThumb = null;
+                case true when !_debugPreview:
+                {
+                    _savedFocusedThumb = _focusedThumb;
+                    SetFocus(null);
+                    _savedMaskRadius = _maskRadius;
+                    _savedPadding = _padding;
+                    _savedFitMode = _fitMode;
+                    _savedCropOffsetX = _cropOffsetX;
+                    _savedCropOffsetY = _cropOffsetY;
+                    _savedBackgroundColor = _backgroundColor;
+                    _savedFxState = _fxState.Clone();
+                    _backgroundColor = null;
+                    _fxState = new ShadowOutlineState();
+                    if (_bgColorToggleCtrl != null)
+                    {
+                        _bgColorToggleCtrl.IsChecked = false;
+                        _bgColorToggleCtrl.IsEnabled = false;
+                    }
+
+                    fxButton.IsEnabled = false;
+                    break;
+                }
+                case false when _debugPreview:
+                {
+                    _maskRadius = _savedMaskRadius;
+                    _padding = _savedPadding;
+                    _fitMode = _savedFitMode;
+                    _cropOffsetX = _savedCropOffsetX;
+                    _cropOffsetY = _savedCropOffsetY;
+                    _backgroundColor = _savedBackgroundColor;
+                    _fxState = _savedFxState ?? new ShadowOutlineState();
+                    _savedFxState = null;
+                    if (_bgColorToggleCtrl != null)
+                    {
+                        _bgColorToggleCtrl.IsEnabled = true;
+                        _bgColorToggleCtrl.IsChecked = _backgroundColor.HasValue;
+                    }
+
+                    fxButton.IsEnabled = true;
+                    _maskSliderCtrl?.Value = _maskRadius * 100;
+                    _maskValueCtrl?.Text = ((int)Math.Round(_maskRadius * 100)).ToString();
+                    _paddingSliderCtrl?.Value = _padding * 100;
+                    _paddingValueCtrl?.Text = ((int)Math.Round(_padding * 100)).ToString();
+                    UpdateFitModeLabel();
+                    if (_savedFocusedThumb != null
+                        && (_topThumbs.Contains(_savedFocusedThumb) || _smallThumbs.Contains(_savedFocusedThumb)))
+                        SetFocus(_savedFocusedThumb);
+                    _savedFocusedThumb = null;
+                    break;
+                }
             }
 
             _debugPreview = next;
@@ -436,6 +464,12 @@ public partial class MainWindow : Window
     {
         if (_bgColorToggleCtrl == null)
             return;
+        if (_debugPreview)
+        {
+            _bgColorToggleCtrl.IsEnabled = false;
+            return;
+        }
+
         var any = AnyTransparentSource();
         _bgColorToggleCtrl.IsEnabled = any;
         if (!any && _backgroundColor.HasValue)
