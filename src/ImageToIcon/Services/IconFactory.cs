@@ -3,6 +3,13 @@ using SkiaSharp;
 
 namespace ImageToIcon.Services;
 
+public enum FitMode
+{
+    Fit,
+    Stretch,
+    Crop
+}
+
 // Cross-platform ICO writer. Ported from SilDev.Drawing.IconFactory, now on SkiaSharp.
 public static class IconFactory
 {
@@ -18,30 +25,48 @@ public static class IconFactory
         256, 48, 32, 24, 16
     ];
 
-    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0)
+    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0)
     {
         var maxDim = Math.Max(source.Width, source.Height);
         foreach (var s in sizes.OrderByDescending(x => x))
         {
             if (s > maxDim || s < MinSize || s > MaxSize) continue;
-            yield return ResizePadded(source, s, maskRadius, padding);
+            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY);
         }
     }
 
-    // Aspect-fit the source into a square of `size`, centered on transparent background.
-    // Uses a separable Lanczos3 resampler to match the quality of ImageSharp's
-    // KnownResamplers.Lanczos3 (previously used before the SkiaSharp migration).
-    // maskRadius: 0 = no mask, 1 = full circle, values between = rounded corners.
-    // padding: 0..1 = fraction of the square's half-width reserved as transparent
-    // border per side; floored to whole pixels so small sizes drop to 0 naturally.
-    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0)
+    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0)
     {
         var padPx = (int)(Math.Clamp(padding, 0, 1) * size);
         var inner = Math.Max(1, size - 2 * padPx);
 
-        var scale = Math.Min((double)inner / source.Width, (double)inner / source.Height);
-        var w = Math.Max(1, (int)Math.Round(source.Width * scale));
-        var h = Math.Max(1, (int)Math.Round(source.Height * scale));
+        int w, h;
+        float dx, dy;
+        switch (mode)
+        {
+            case FitMode.Stretch:
+                w = inner;
+                h = inner;
+                dx = padPx;
+                dy = padPx;
+                break;
+            case FitMode.Crop:
+                var cover = Math.Max((double)inner / source.Width, (double)inner / source.Height);
+                w = Math.Max(1, (int)Math.Round(source.Width * cover));
+                h = Math.Max(1, (int)Math.Round(source.Height * cover));
+                var panX = Math.Clamp(cropOffsetX, -1.0, 1.0);
+                var panY = Math.Clamp(cropOffsetY, -1.0, 1.0);
+                dx = padPx + (inner - w) / 2f + (float)(panX * (w - inner) / 2.0);
+                dy = padPx + (inner - h) / 2f + (float)(panY * (h - inner) / 2.0);
+                break;
+            default:
+                var fit = Math.Min((double)inner / source.Width, (double)inner / source.Height);
+                w = Math.Max(1, (int)Math.Round(source.Width * fit));
+                h = Math.Max(1, (int)Math.Round(source.Height * fit));
+                dx = padPx + (inner - w) / 2f;
+                dy = padPx + (inner - h) / 2f;
+                break;
+        }
 
         using var resized = Lanczos3Resampler.Resize(source, w, h);
 
@@ -54,9 +79,11 @@ public static class IconFactory
             var r = (float)(Math.Clamp(maskRadius, 0, 1) * inner / 2.0);
             canvas.ClipRoundRect(new SKRoundRect(new SKRect(padPx, padPx, padPx + inner, padPx + inner), r, r), antialias: true);
         }
+        else if (mode == FitMode.Crop)
+        {
+            canvas.ClipRect(new SKRect(padPx, padPx, padPx + inner, padPx + inner));
+        }
 
-        var dx = (size - w) / 2f;
-        var dy = (size - h) / 2f;
         using var image = SKImage.FromBitmap(resized);
         canvas.DrawImage(image, new SKRect(dx, dy, dx + w, dy + h));
         canvas.Flush();

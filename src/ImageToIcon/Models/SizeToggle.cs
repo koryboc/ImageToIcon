@@ -5,34 +5,31 @@ namespace ImageToIcon.Models;
 
 public class SizeToggle(int size, bool isChecked, bool isCustom = false) : INotifyPropertyChanged
 {
-    private bool _isAvailable = true;
-    private bool _isChecked = isChecked;
-
     public int Size { get; } = size;
     public bool IsCustom { get; } = isCustom;
     public string Label => Size.ToString();
 
     public bool IsChecked
     {
-        get => _isChecked;
+        get;
         set
         {
-            if (_isChecked == value) return;
-            _isChecked = value;
+            if (field == value) return;
+            field = value;
             Raise();
         }
-    }
+    } = isChecked;
 
     public bool IsAvailable
     {
-        get => _isAvailable;
+        get;
         set
         {
-            if (_isAvailable == value) return;
-            _isAvailable = value;
+            if (field == value) return;
+            field = value;
             Raise();
         }
-    }
+    } = true;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

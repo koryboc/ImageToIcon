@@ -4,8 +4,6 @@ namespace ImageToIcon.Models;
 
 public class SizeCellVm(int size, bool reserved, string tooltip) : INotifyPropertyChanged
 {
-    private bool _isChecked = reserved;
-
     public int Size { get; } = size;
     public string SizeText => Size.ToString();
     public string Tooltip { get; } = tooltip;
@@ -13,15 +11,15 @@ public class SizeCellVm(int size, bool reserved, string tooltip) : INotifyProper
 
     public bool IsChecked
     {
-        get => _isChecked;
+        get;
         set
         {
-            if (_isChecked == value)
+            if (field == value)
                 return;
-            _isChecked = value;
+            field = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsChecked)));
         }
-    }
+    } = reserved;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 }

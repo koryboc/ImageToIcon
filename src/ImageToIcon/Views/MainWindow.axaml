@@ -102,18 +102,40 @@
             <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource AppThumbBorderBrush}" />
         </Style>
+        <Style Selector="TextBlock.sizeLabel">
+            <Setter Property="Foreground" Value="{DynamicResource AppThumbBorderBrush}" />
+            <Setter Property="FontFamily" Value="Calibri" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="10" />
+        </Style>
+        <Style Selector="TextBlock.sizeLabel.focused">
+            <Setter Property="Foreground" Value="Orange" />
+        </Style>
+        <Style Selector="TextBlock.focusMode">
+            <Setter Property="Foreground" Value="Orange" />
+        </Style>
+        <Style Selector="Slider.focusMode">
+            <Setter Property="Foreground" Value="Orange" />
+        </Style>
+        <Style Selector="Button.focusMode">
+            <Setter Property="Foreground" Value="Orange" />
+            <Setter Property="BorderBrush" Value="Orange" />
+        </Style>
     </Window.Styles>
 
     <Window.Resources>
         <DataTemplate x:Key="ThumbTemplate" DataType="m:IconThumb">
             <StackPanel Margin="2" Spacing="2"
-                        ToolTip.Tip="{Binding TooltipText}"
                         Cursor="Hand"
                         Tag="{Binding}"
                         Background="Transparent"
                         PointerPressed="OnThumbPointerPressed"
+                        PointerMoved="OnThumbPointerMoved"
+                        PointerReleased="OnThumbPointerReleased"
+                        PointerCaptureLost="OnThumbPointerCaptureLost"
                         DragDrop.AllowDrop="True">
-                <Grid Width="{Binding DisplaySize}" Height="{Binding DisplaySize}">
+                <Grid Width="{Binding DisplaySize}" Height="{Binding DisplaySize}" HorizontalAlignment="Center"
+                      ToolTip.Tip="Left-click: replace image&#x0a;Right-click: toggle focus&#x0a;Drag (crop mode): pan">
                     <Image Source="{Binding Preview}" Stretch="Fill" />
                     <Rectangle Stroke="{DynamicResource AppThumbBorderBrush}"
                                StrokeThickness="1"
@@ -126,11 +148,21 @@
                                IsHitTestVisible="False"
                                IsVisible="{Binding IsPaddingDragging}" />
                 </Grid>
-                <TextBlock Text="{Binding SizeLabel}"
-                           Foreground="{DynamicResource AppThumbBorderBrush}"
-                           FontFamily="Calibri" FontWeight="Bold" FontSize="10"
-                           HorizontalAlignment="Right"
-                           IsHitTestVisible="False" />
+                <Grid Width="{Binding DisplaySize}" HorizontalAlignment="Center">
+                    <TextBlock Text="✱"
+                               Foreground="Red"
+                               FontSize="8"
+                               HorizontalAlignment="Left"
+                               Cursor="Hand"
+                               ToolTip.Tip="Reset overrides"
+                               PointerPressed="OnDecoupleIconClicked"
+                               IsVisible="{Binding IsDecoupled}" />
+                    <TextBlock Classes="sizeLabel"
+                               Classes.focused="{Binding IsFocused}"
+                               Text="{Binding SizeLabel}"
+                               ToolTip.Tip="{Binding TooltipText}"
+                               HorizontalAlignment="Right" />
+                </Grid>
             </StackPanel>
         </DataTemplate>
     </Window.Resources>
@@ -159,37 +191,54 @@
                         </ItemsControl>
                     </StackPanel>
                 </ScrollViewer>
-                <StackPanel Grid.Row="1" Orientation="Horizontal"
-                            HorizontalAlignment="Left" Margin="0,4,0,0" Spacing="4">
-                    <ToggleButton x:Name="BorderToggle" Classes="iconbtn" IsChecked="True"
-                                  ToolTip.Tip="Toggle thumb borders">
-                        <Rectangle Width="12" Height="12"
-                                   Stroke="{DynamicResource ButtonForeground}"
-                                   StrokeThickness="1"
-                                   StrokeDashArray="2,2"
-                                   Opacity="0.65" />
-                    </ToggleButton>
-                    <ToggleButton x:Name="DebugToggle" Classes="iconbtn debugtoggle"
-                                  ToolTip.Tip="Show size labels instead of previews (session only)">
-                        <TextBlock Text="123" FontSize="9" FontWeight="Bold"
-                                   Opacity="0.65"
-                                   Height="12"
-                                   TextAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </ToggleButton>
-                    <Slider x:Name="MaskSlider" Minimum="0" Maximum="100" Width="80"
-                            VerticalAlignment="Center" Margin="4,0,0,0"
-                            ToolTip.Tip="Corner radius (0 = square, 100 = circle)" />
-                    <TextBlock x:Name="MaskValue" Text="0" MinWidth="24"
-                               VerticalAlignment="Center" FontSize="11"
-                               Foreground="{DynamicResource AppSubTextBrush}" />
-                    <Slider x:Name="PaddingSlider" Minimum="0" Maximum="10" Width="50"
-                            VerticalAlignment="Center" Margin="4,0,0,0"
-                            ToolTip.Tip="Padding per side (percent; floored to whole pixels)" />
-                    <TextBlock x:Name="PaddingValue" Text="0" MinWidth="24"
-                               VerticalAlignment="Center" FontSize="11"
-                               Foreground="{DynamicResource AppSubTextBrush}" />
-                </StackPanel>
+                <Grid Grid.Row="1" Margin="0,4,0,0">
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Left" Spacing="4">
+                        <ToggleButton x:Name="BorderToggle" Classes="iconbtn" IsChecked="True"
+                                      ToolTip.Tip="Toggle thumb borders">
+                            <Rectangle Width="12" Height="12"
+                                       Stroke="{DynamicResource ButtonForeground}"
+                                       StrokeThickness="1"
+                                       StrokeDashArray="2,2"
+                                       Opacity="0.65" />
+                        </ToggleButton>
+                        <ToggleButton x:Name="DebugToggle" Classes="iconbtn debugtoggle"
+                                      ToolTip.Tip="Replace frames with labeled size tiles&#x0a;so you can see which size the OS picks in each context">
+                            <TextBlock Text="123" FontSize="9" FontWeight="Bold"
+                                       Opacity="0.65"
+                                       Height="12"
+                                       TextAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </ToggleButton>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right" Spacing="4">
+                        <Slider x:Name="MaskSlider" Minimum="0" Maximum="100" Width="80"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Corner radius (0 = square, 100 = circle)" />
+                        <TextBlock x:Name="MaskValue" Text="0" MinWidth="24"
+                                   VerticalAlignment="Center" FontSize="11"
+                                   Foreground="{DynamicResource AppSubTextBrush}" />
+                        <Slider x:Name="PaddingSlider" Minimum="0" Maximum="10" Width="50"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Padding per side (percent; floored to whole pixels)" />
+                        <TextBlock x:Name="PaddingValue" Text="0" MinWidth="24"
+                                   VerticalAlignment="Center" FontSize="11"
+                                   Foreground="{DynamicResource AppSubTextBrush}" />
+                        <Button x:Name="FitModeButton" MinWidth="0" MinHeight="0" Padding="4,3"
+                                Background="{DynamicResource ButtonBackground}"
+                                BorderBrush="{DynamicResource ButtonBorderBrush}"
+                                Foreground="{DynamicResource ButtonForeground}"
+                                VerticalContentAlignment="Center"
+                                HorizontalContentAlignment="Center">
+                            <TextBlock x:Name="FitModeLabel" Text="⛶" FontSize="12"
+                                       Opacity="0.65"
+                                       Height="14"
+                                       TextAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
 

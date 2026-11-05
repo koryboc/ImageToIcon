@@ -24,7 +24,14 @@ namespace ImageToIcon.Views;
 
 public partial class MainWindow : Window
 {
+    private const double PanThresholdPx = 4;
     private readonly CancellationTokenSource _cts = new();
+    private readonly Button? _fitModeButtonCtrl;
+    private readonly TextBlock? _fitModeLabelCtrl;
+    private readonly Slider? _maskSliderCtrl;
+    private readonly TextBlock? _maskValueCtrl;
+    private readonly Slider? _paddingSliderCtrl;
+    private readonly TextBlock? _paddingValueCtrl;
     private readonly SelfUpdateCoordinator _selfUpdate;
     private readonly Settings _settings;
     private readonly ObservableCollection<SizeToggle> _sizeToggles = [];
@@ -32,13 +39,29 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<IconThumb> _smallThumbs = [];
     private readonly ObservableCollection<IconThumb> _topThumbs = [];
     private readonly Button _updateBtn;
+    private double _cropOffsetX;
+    private double _cropOffsetY;
     private bool _debugPreview;
+    private FitMode _fitMode;
+    private IconThumb? _focusedThumb;
     private bool _iconIsDebug;
     private CancellationTokenSource? _maskDebounceCts;
     private double _maskRadius;
     private double _padding;
+    private bool _panActive;
+    private double _panStartCropX;
+    private double _panStartCropY;
+    private IconThumb? _pressedThumb;
+    private bool _pressMovedBeyondThreshold;
+    private Point _pressPoint;
     private Task _rebuildChain = Task.CompletedTask;
     private CancellationTokenSource? _rebuildCts;
+    private double _savedCropOffsetX;
+    private double _savedCropOffsetY;
+    private FitMode _savedFitMode;
+    private IconThumb? _savedFocusedThumb;
+    private double _savedMaskRadius;
+    private double _savedPadding;
 
     private bool _sliderDragging;
     private SKBitmap? _sourceImage;
@@ -74,14 +97,45 @@ public partial class MainWindow : Window
         var debugToggle = this.FindControl<ToggleButton>("DebugToggle")!;
         debugToggle.Click += (_, _) =>
         {
-            _debugPreview = debugToggle.IsChecked == true;
+            var next = debugToggle.IsChecked == true;
+            if (next && !_debugPreview)
+            {
+                _savedFocusedThumb = _focusedThumb;
+                SetFocus(null);
+                _savedMaskRadius = _maskRadius;
+                _savedPadding = _padding;
+                _savedFitMode = _fitMode;
+                _savedCropOffsetX = _cropOffsetX;
+                _savedCropOffsetY = _cropOffsetY;
+            }
+            else if (!next && _debugPreview)
+            {
+                _maskRadius = _savedMaskRadius;
+                _padding = _savedPadding;
+                _fitMode = _savedFitMode;
+                _cropOffsetX = _savedCropOffsetX;
+                _cropOffsetY = _savedCropOffsetY;
+                _maskSliderCtrl?.Value = _maskRadius * 100;
+                _maskValueCtrl?.Text = ((int)Math.Round(_maskRadius * 100)).ToString();
+                _paddingSliderCtrl?.Value = _padding * 100;
+                _paddingValueCtrl?.Text = ((int)Math.Round(_padding * 100)).ToString();
+                UpdateFitModeLabel();
+                if (_savedFocusedThumb != null
+                    && (_topThumbs.Contains(_savedFocusedThumb) || _smallThumbs.Contains(_savedFocusedThumb)))
+                    SetFocus(_savedFocusedThumb);
+                _savedFocusedThumb = null;
+            }
+
+            _debugPreview = next;
             openBtn.IsEnabled = !_debugPreview;
+            UpdateFitModeAvailability();
             RebuildThumbs(true);
         };
 
-        _maskRadius = Math.Clamp(_settings.MaskRadius, 0, 1);
         var maskSlider = this.FindControl<Slider>("MaskSlider")!;
         var maskValue = this.FindControl<TextBlock>("MaskValue")!;
+        _maskSliderCtrl = maskSlider;
+        _maskValueCtrl = maskValue;
         maskSlider.Value = _maskRadius * 100;
         maskValue.Text = ((int)Math.Round(_maskRadius * 100)).ToString();
         maskSlider.PropertyChanged += (_, e) =>
@@ -90,15 +144,26 @@ public partial class MainWindow : Window
                 return;
             var v = maskSlider.Value / 100.0;
             maskValue.Text = ((int)Math.Round(maskSlider.Value)).ToString();
-            if (Math.Abs(v - _maskRadius) < 0.0001)
+            var current = _focusedThumb != null ? _focusedThumb.MaskRadiusOverride ?? _maskRadius : _maskRadius;
+            if (Math.Abs(v - current) < 0.0001)
                 return;
-            _maskRadius = v;
+            if (_focusedThumb != null)
+            {
+                _focusedThumb.MaskRadiusOverride = v;
+                _focusedThumb.NotifyOverridesChanged();
+            }
+            else
+            {
+                _maskRadius = v;
+            }
+
             DebouncedRebuild();
         };
 
-        _padding = Math.Clamp(_settings.Padding, 0, 0.1);
         var paddingSlider = this.FindControl<Slider>("PaddingSlider")!;
         var paddingValue = this.FindControl<TextBlock>("PaddingValue")!;
+        _paddingSliderCtrl = paddingSlider;
+        _paddingValueCtrl = paddingValue;
         paddingSlider.Value = _padding * 100;
         paddingValue.Text = ((int)Math.Round(_padding * 100)).ToString();
         paddingSlider.PropertyChanged += (_, e) =>
@@ -107,14 +172,52 @@ public partial class MainWindow : Window
                 return;
             var v = paddingSlider.Value / 100.0;
             paddingValue.Text = ((int)Math.Round(paddingSlider.Value)).ToString();
-            if (Math.Abs(v - _padding) < 0.0001)
+            var current = _focusedThumb != null ? _focusedThumb.PaddingOverride ?? _padding : _padding;
+            if (Math.Abs(v - current) < 0.0001)
                 return;
-            _padding = v;
+            if (_focusedThumb != null)
+            {
+                _focusedThumb.PaddingOverride = v;
+                _focusedThumb.NotifyOverridesChanged();
+            }
+            else
+            {
+                _padding = v;
+            }
+
             DebouncedRebuild();
         };
 
         AttachSliderDragTracking(maskSlider);
         AttachSliderDragTracking(paddingSlider);
+
+        var fitModeButton = this.FindControl<Button>("FitModeButton")!;
+        var fitModeLabel = this.FindControl<TextBlock>("FitModeLabel")!;
+        _fitModeLabelCtrl = fitModeLabel;
+        _fitModeButtonCtrl = fitModeButton;
+        UpdateFitModeLabel();
+        fitModeButton.Click += (_, _) =>
+        {
+            var current = _focusedThumb != null ? _focusedThumb.FitModeOverride ?? _fitMode : _fitMode;
+            var next = current switch
+            {
+                FitMode.Fit => FitMode.Stretch,
+                FitMode.Stretch => FitMode.Crop,
+                _ => FitMode.Fit
+            };
+            if (_focusedThumb != null)
+            {
+                _focusedThumb.FitModeOverride = next;
+                _focusedThumb.NotifyOverridesChanged();
+            }
+            else
+            {
+                _fitMode = next;
+            }
+
+            UpdateFitModeLabel();
+            RebuildThumbs(true);
+        };
 
         paddingSlider.AddHandler(PointerPressedEvent, (_, _) => SetPaddingDragHighlight(true), RoutingStrategies.Tunnel);
         paddingSlider.AddHandler(PointerReleasedEvent, (_, _) => SetPaddingDragHighlight(false), RoutingStrategies.Tunnel);
@@ -169,8 +272,6 @@ public partial class MainWindow : Window
             _settings.SelectedSizes = _sizeToggles.Where(t => t.IsChecked).Select(t => t.Size).ToArray();
             _settings.CustomSizes = _sizeToggles.Where(t => t.IsCustom).Select(t => t.Size).ToArray();
             _settings.ShowThumbBorders = borderToggle.IsChecked == true;
-            _settings.MaskRadius = _maskRadius;
-            _settings.Padding = _padding;
             _settings.Save();
             _cts.Cancel();
             _rebuildCts?.Cancel();
@@ -250,6 +351,7 @@ public partial class MainWindow : Window
         var maxDim = Math.Max(_sourceImage.Width, _sourceImage.Height);
         foreach (var t in _sizeToggles)
             t.IsAvailable = t.Size <= maxDim;
+        UpdateFitModeAvailability();
     }
 
     private void OnTogglePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -297,10 +399,104 @@ public partial class MainWindow : Window
         slider.AddHandler(PointerCaptureLostEvent, (_, _) => OnSliderReleased(), RoutingStrategies.Tunnel);
     }
 
+    private SKBitmap? EffectiveSourceForControls()
+    {
+        return _focusedThumb != null ? SourceFor(_focusedThumb) : _sourceImage;
+    }
+
+    private void UpdateFitModeAvailability()
+    {
+        if (_fitModeButtonCtrl == null)
+            return;
+        var src = EffectiveSourceForControls();
+        var square = _debugPreview || src != null && src.Width == src.Height;
+        _fitModeButtonCtrl.IsEnabled = !square;
+        if (!square)
+            return;
+        if (_focusedThumb != null)
+        {
+            if (_focusedThumb.FitModeOverride is { } m && m != FitMode.Fit)
+            {
+                _focusedThumb.FitModeOverride = FitMode.Fit;
+                _focusedThumb.NotifyOverridesChanged();
+            }
+        }
+        else
+        {
+            _fitMode = FitMode.Fit;
+        }
+
+        UpdateFitModeLabel();
+    }
+
+    private void UpdateFitModeLabel()
+    {
+        if (_fitModeLabelCtrl == null)
+            return;
+        var mode = _focusedThumb != null ? _focusedThumb.FitModeOverride ?? _fitMode : _fitMode;
+        _fitModeLabelCtrl.Text = mode switch
+        {
+            FitMode.Stretch => "⇆",
+            FitMode.Crop => "⌗",
+            _ => "⛶"
+        };
+        ToolTip.SetTip(_fitModeLabelCtrl, mode switch
+        {
+            FitMode.Stretch => "Stretch to fill",
+            FitMode.Crop => "Crop to fill",
+            _ => "Fit inside"
+        });
+    }
+
+    private void SyncControlsToFocus()
+    {
+        var mask = _focusedThumb != null ? _focusedThumb.MaskRadiusOverride ?? _maskRadius : _maskRadius;
+        var pad = _focusedThumb != null ? _focusedThumb.PaddingOverride ?? _padding : _padding;
+        _maskSliderCtrl?.Value = mask * 100;
+        _maskValueCtrl?.Text = ((int)Math.Round(mask * 100)).ToString();
+        _paddingSliderCtrl?.Value = pad * 100;
+        _paddingValueCtrl?.Text = ((int)Math.Round(pad * 100)).ToString();
+        UpdateFitModeLabel();
+
+        var on = _focusedThumb != null;
+        ApplyFocusClass(_maskSliderCtrl, on);
+        ApplyFocusClass(_maskValueCtrl, on);
+        ApplyFocusClass(_paddingSliderCtrl, on);
+        ApplyFocusClass(_paddingValueCtrl, on);
+        ApplyFocusClass(_fitModeButtonCtrl, on);
+        ApplyFocusClass(_fitModeLabelCtrl, on);
+        UpdateFitModeAvailability();
+    }
+
+    private static void ApplyFocusClass(StyledElement? c, bool on)
+    {
+        if (c == null)
+            return;
+        var has = c.Classes.Contains("focusMode");
+        switch (on)
+        {
+            case true when !has:
+                c.Classes.Add("focusMode");
+                break;
+            case false when has:
+                c.Classes.Remove("focusMode");
+                break;
+        }
+    }
+
     private void SetPaddingDragHighlight(bool on)
     {
+        if (_focusedThumb != null)
+        {
+            foreach (var t in _topThumbs.Concat(_smallThumbs))
+                t.IsPaddingDragging = on && t == _focusedThumb;
+            return;
+        }
+
         foreach (var t in _topThumbs)
             t.IsPaddingDragging = on;
+        foreach (var t in _smallThumbs)
+            t.IsPaddingDragging = false;
     }
 
     private void OnSliderReleased()
@@ -308,7 +504,7 @@ public partial class MainWindow : Window
         if (!_sliderDragging)
             return;
         _sliderDragging = false;
-        foreach (var t in _smallThumbs)
+        foreach (var t in _topThumbs.Concat(_smallThumbs))
             t.DisposeContent();
         RebuildThumbs();
     }
@@ -330,12 +526,15 @@ public partial class MainWindow : Window
         }, TaskScheduler.Default);
     }
 
-    private static void SyncThumbCollection(ObservableCollection<IconThumb> col, List<int> desired)
+    private void SyncThumbCollection(ObservableCollection<IconThumb> col, List<int> desired)
     {
         for (var i = col.Count - 1; i >= 0; i--)
         {
             if (desired.Contains(col[i].Size))
                 continue;
+            if (_focusedThumb == col[i])
+                SetFocus(null);
+            col[i].ClearOverrides();
             col[i].DisposeContent();
             col.RemoveAt(i);
         }
@@ -379,14 +578,24 @@ public partial class MainWindow : Window
 
         if (_sliderDragging)
         {
-            if (_topThumbs.Count == 0 || _debugPreview)
+            if (_debugPreview)
                 return;
-            var top = _topThumbs[0];
+            var live = _focusedThumb ?? _topThumbs.FirstOrDefault();
+            if (live == null)
+                return;
+            var liveSource = SourceFor(live);
+            if (liveSource == null)
+                return;
+            var liveMask = MaskFor(live);
+            var livePad = PaddingFor(live);
+            var liveFit = FitModeFor(live);
+            var liveCx = CropXFor(live);
+            var liveCy = CropYFor(live);
             try
             {
                 var (resized, preview) = await Task.Run(() =>
                 {
-                    var r = IconFactory.ResizePadded(source, top.Size, _maskRadius, _padding);
+                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy);
                     var p = IconThumb.ToAvaloniaBitmap(r);
                     return (r, p);
                 }, ct);
@@ -397,7 +606,7 @@ public partial class MainWindow : Window
                     return;
                 }
 
-                await Dispatcher.UIThread.InvokeAsync(() => top.Fill(resized, preview, false), DispatcherPriority.Background);
+                await Dispatcher.UIThread.InvokeAsync(() => live.Fill(resized, preview, false), DispatcherPriority.Background);
             }
             catch (OperationCanceledException)
             {
@@ -447,7 +656,8 @@ public partial class MainWindow : Window
             var fillTasks = toFill.Select(thumb => Task.Run(async () =>
             {
                 ct.ThrowIfCancellationRequested();
-                var resized = IconFactory.ResizePadded(source, thumb.Size, _maskRadius, _padding);
+                var thumbSource = SourceFor(thumb) ?? source;
+                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb));
                 var preview = IconThumb.ToAvaloniaBitmap(resized);
                 if (ct.IsCancellationRequested)
                 {
@@ -565,7 +775,7 @@ public partial class MainWindow : Window
         var innerRect = new Rect(padPx, padPx, Math.Max(1, size - 2 * padPx), Math.Max(1, size - 2 * padPx));
         using (var ctx = rtb.CreateDrawingContext())
         {
-            IDisposable? clip = null;
+            DrawingContext.PushedState? clip = null;
             if (maskRadius > 0)
             {
                 var r = Math.Clamp(maskRadius, 0, 1) * innerRect.Width / 2.0;
@@ -722,9 +932,54 @@ public partial class MainWindow : Window
         return totalW;
     }
 
-    private ObservableCollection<IconThumb> CollectionFor(int size)
+    private double MaskFor(IconThumb t)
     {
-        return size >= 256 ? _topThumbs : _smallThumbs;
+        return t.MaskRadiusOverride ?? _maskRadius;
+    }
+
+    private double PaddingFor(IconThumb t)
+    {
+        return t.PaddingOverride ?? _padding;
+    }
+
+    private FitMode FitModeFor(IconThumb t)
+    {
+        return t.FitModeOverride ?? _fitMode;
+    }
+
+    private double CropXFor(IconThumb t)
+    {
+        return t.CropOffsetXOverride ?? _cropOffsetX;
+    }
+
+    private double CropYFor(IconThumb t)
+    {
+        return t.CropOffsetYOverride ?? _cropOffsetY;
+    }
+
+    private SKBitmap? SourceFor(IconThumb t)
+    {
+        return t.OverrideSource ?? _sourceImage;
+    }
+
+    private void SetFocus(IconThumb? thumb)
+    {
+        if (_focusedThumb == thumb)
+            return;
+        _focusedThumb?.IsFocused = false;
+        _focusedThumb = thumb;
+        _focusedThumb?.IsFocused = true;
+        SyncControlsToFocus();
+    }
+
+    private void SnapshotGlobalsInto(IconThumb t)
+    {
+        t.MaskRadiusOverride ??= _maskRadius;
+        t.PaddingOverride ??= _padding;
+        t.FitModeOverride ??= _fitMode;
+        t.CropOffsetXOverride ??= _cropOffsetX;
+        t.CropOffsetYOverride ??= _cropOffsetY;
+        t.NotifyOverridesChanged();
     }
 
     private async Task OpenImageAsync()
@@ -735,9 +990,9 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter = ImageLoader.BuildFilePickerFilters()
         });
-        var file = files.FirstOrDefault();
-        if (file == null)
+        if (files.Count == 0)
             return;
+        var file = files[0];
         LoadFromPath(file.Path.LocalPath);
     }
 
@@ -777,9 +1032,15 @@ public partial class MainWindow : Window
             foreach (var t in ordered)
             {
                 if (t.Source != null)
+                {
                     images.Add(IconFactory.Copy(t.Source));
-                else if (_sourceImage != null)
-                    images.Add(IconFactory.ResizePadded(_sourceImage, t.Size, _maskRadius, _padding));
+                }
+                else
+                {
+                    var src = SourceFor(t);
+                    if (src != null)
+                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t)));
+                }
             }
 
             IconFactory.Save(images, file.Path.LocalPath);
@@ -827,13 +1088,11 @@ public partial class MainWindow : Window
             var newImg = ImageLoader.TryLoad(path);
             if (newImg == null)
                 return;
-            var resized = IconFactory.ResizePadded(newImg, thumb.Size, _maskRadius, _padding);
-            newImg.Dispose();
-            var col = CollectionFor(thumb.Size);
-            var idx = col.IndexOf(thumb);
-            thumb.Replace(resized);
-            col.RemoveAt(idx);
-            col.Insert(idx, thumb);
+            SnapshotGlobalsInto(thumb);
+            thumb.SetOverrideSource(newImg);
+            thumb.DisposeContent();
+            UpdateFitModeAvailability();
+            RebuildThumbs();
             return;
         }
 
@@ -876,11 +1135,8 @@ public partial class MainWindow : Window
         }
 
         var existing = _sizeToggles.Select(t => t.Size).ToHashSet();
-        foreach (var size in target)
+        foreach (var toggle in from size in target where !existing.Contains(size) select new SizeToggle(size, true, true))
         {
-            if (existing.Contains(size))
-                continue;
-            var toggle = new SizeToggle(size, true, true);
             toggle.PropertyChanged += OnTogglePropertyChanged;
             InsertSorted(toggle);
         }
@@ -894,16 +1150,109 @@ public partial class MainWindow : Window
         RebuildThumbs();
     }
 
-    private async void OnThumbPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnThumbPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_debugPreview)
+            return;
+        if (sender is not Control { Tag: IconThumb thumb } c)
+            return;
+        var props = e.GetCurrentPoint(c).Properties;
+
+        if (props.IsRightButtonPressed)
+        {
+            SetFocus(_focusedThumb == thumb ? null : thumb);
+            e.Handled = true;
+            return;
+        }
+
+        if (!props.IsLeftButtonPressed)
+            return;
+
+        _pressedThumb = thumb;
+        _pressPoint = e.GetPosition(this);
+        _panStartCropX = CropXFor(thumb);
+        _panStartCropY = CropYFor(thumb);
+        _panActive = false;
+        _pressMovedBeyondThreshold = false;
+        e.Pointer.Capture(c);
+    }
+
+    private void OnThumbPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_pressedThumb == null)
+            return;
+        var panSource = SourceFor(_pressedThumb);
+        if (panSource == null)
+            return;
+
+        var pos = e.GetPosition(this);
+        var dx = pos.X - _pressPoint.X;
+        var dy = pos.Y - _pressPoint.Y;
+
+        if (!_pressMovedBeyondThreshold)
+        {
+            if (Math.Abs(dx) < PanThresholdPx && Math.Abs(dy) < PanThresholdPx)
+                return;
+            _pressMovedBeyondThreshold = true;
+            if (FitModeFor(_pressedThumb) != FitMode.Crop)
+                return;
+            _panActive = true;
+            _sliderDragging = true;
+        }
+
+        if (!_panActive)
+            return;
+
+        var thumb = _pressedThumb;
+        var pad = PaddingFor(thumb);
+        var padPx = (int)(Math.Clamp(pad, 0, 1) * thumb.Size);
+        var inner = Math.Max(1, thumb.Size - 2 * padPx);
+        var cover = Math.Max((double)inner / panSource.Width, (double)inner / panSource.Height);
+        var w = panSource.Width * cover;
+        var h = panSource.Height * cover;
+        var overflowX = Math.Max(1e-6, w - inner);
+        var overflowY = Math.Max(1e-6, h - inner);
+
+        var newX = Math.Clamp(_panStartCropX + 2.0 * dx / overflowX, -1.0, 1.0);
+        var newY = Math.Clamp(_panStartCropY + 2.0 * dy / overflowY, -1.0, 1.0);
+
+        if (_focusedThumb == thumb)
+        {
+            thumb.CropOffsetXOverride = newX;
+            thumb.CropOffsetYOverride = newY;
+            thumb.NotifyOverridesChanged();
+        }
+        else if (thumb.IsDecoupled)
+        {
+            thumb.CropOffsetXOverride = newX;
+            thumb.CropOffsetYOverride = newY;
+        }
+        else
+        {
+            _cropOffsetX = newX;
+            _cropOffsetY = newY;
+        }
+
+        RebuildThumbs();
+    }
+
+    private async void OnThumbPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         try
         {
-            if (_debugPreview)
+            if (_pressedThumb == null)
                 return;
-            if (sender is not Control { Tag: IconThumb thumb } c)
+            var thumb = _pressedThumb;
+            var wasPan = _panActive;
+            _pressedThumb = null;
+            _panActive = false;
+            e.Pointer.Capture(null);
+
+            if (wasPan)
+            {
+                OnSliderReleased();
                 return;
-            if (!e.GetCurrentPoint(c).Properties.IsLeftButtonPressed)
-                return;
+            }
 
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
@@ -916,18 +1265,39 @@ public partial class MainWindow : Window
             var img = ImageLoader.TryLoad(file.Path.LocalPath);
             if (img == null)
                 return;
-            var resized = IconFactory.ResizePadded(img, thumb.Size, _maskRadius, _padding);
-            img.Dispose();
-            var col = CollectionFor(thumb.Size);
-            var idx = col.IndexOf(thumb);
-            thumb.Replace(resized);
-            col.RemoveAt(idx);
-            col.Insert(idx, thumb);
+            SnapshotGlobalsInto(thumb);
+            thumb.SetOverrideSource(img);
+            thumb.DisposeContent();
+            UpdateFitModeAvailability();
+            RebuildThumbs();
         }
         catch
         {
             // ignored
         }
+    }
+
+    private void OnDecoupleIconClicked(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not Control { DataContext: IconThumb thumb })
+            return;
+        if (_focusedThumb == thumb)
+            SetFocus(null);
+        thumb.ClearOverrides();
+        UpdateFitModeAvailability();
+        RebuildThumbs(true);
+    }
+
+    private void OnThumbPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_pressedThumb == null)
+            return;
+        _pressedThumb = null;
+        if (!_panActive)
+            return;
+        _panActive = false;
+        OnSliderReleased();
     }
 
     private void RefreshUpdateButton()

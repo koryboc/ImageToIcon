@@ -3,19 +3,46 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using ImageToIcon.Services;
 using SkiaSharp;
 
 namespace ImageToIcon.Models;
 
 public class IconThumb(int size) : INotifyPropertyChanged
 {
+    private bool _isFocused;
+    private bool _isPaddingDragging;
     public int Size { get; } = size;
 
-    // Kept only for non-regeneratable pixels (debug, drag-replace); normal rebuilds re-render on save.
     public SKBitmap? Source { get; private set; }
     public Bitmap? Preview { get; private set; }
 
-    private bool _isPaddingDragging;
+    public SKBitmap? OverrideSource { get; private set; }
+    public double? MaskRadiusOverride { get; set; }
+    public double? PaddingOverride { get; set; }
+    public FitMode? FitModeOverride { get; set; }
+    public double? CropOffsetXOverride { get; set; }
+    public double? CropOffsetYOverride { get; set; }
+
+    public bool IsDecoupled => OverrideSource != null
+                               || MaskRadiusOverride.HasValue
+                               || PaddingOverride.HasValue
+                               || FitModeOverride.HasValue
+                               || CropOffsetXOverride.HasValue
+                               || CropOffsetYOverride.HasValue;
+
+    public bool IsFocused
+    {
+        get => _isFocused;
+        set
+        {
+            if (_isFocused == value)
+                return;
+            _isFocused = value;
+            Raise(nameof(IsFocused));
+        }
+    }
+
     public bool IsPaddingDragging
     {
         get => _isPaddingDragging;
@@ -67,6 +94,34 @@ public class IconThumb(int size) : INotifyPropertyChanged
         DeferDispose(Preview);
         Source = null;
         Preview = null;
+    }
+
+    public void SetOverrideSource(SKBitmap? newSource)
+    {
+        var old = OverrideSource;
+        OverrideSource = newSource;
+        Raise(nameof(OverrideSource));
+        Raise(nameof(IsDecoupled));
+        DeferDispose(old);
+    }
+
+    public void NotifyOverridesChanged()
+    {
+        Raise(nameof(IsDecoupled));
+    }
+
+    public void ClearOverrides()
+    {
+        var old = OverrideSource;
+        OverrideSource = null;
+        MaskRadiusOverride = null;
+        PaddingOverride = null;
+        FitModeOverride = null;
+        CropOffsetXOverride = null;
+        CropOffsetYOverride = null;
+        Raise(nameof(OverrideSource));
+        Raise(nameof(IsDecoupled));
+        DeferDispose(old);
     }
 
     // Defer so the render thread can release its native ref before dispose.
