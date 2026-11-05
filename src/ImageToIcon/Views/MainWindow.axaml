@@ -226,18 +226,50 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Right" Spacing="4">
-                        <Slider x:Name="MaskSlider" Minimum="0" Maximum="100" Width="80"
-                                VerticalAlignment="Center"
-                                ToolTip.Tip="Corner radius (0 = square, 100 = circle)" />
-                        <TextBlock x:Name="MaskValue" Text="0" MinWidth="24"
-                                   VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{DynamicResource AppSubTextBrush}" />
-                        <Slider x:Name="PaddingSlider" Minimum="0" Maximum="10" Width="50"
-                                VerticalAlignment="Center"
-                                ToolTip.Tip="Padding per side (percent; floored to whole pixels)" />
-                        <TextBlock x:Name="PaddingValue" Text="0" MinWidth="24"
-                                   VerticalAlignment="Center" FontSize="11"
-                                   Foreground="{DynamicResource AppSubTextBrush}" />
+                        <Button x:Name="AdjustButton" MinWidth="0" MinHeight="0" Height="22" Padding="4,3"
+                                Background="{DynamicResource ButtonBackground}"
+                                BorderBrush="{DynamicResource ButtonBorderBrush}"
+                                Foreground="{DynamicResource ButtonForeground}"
+                                VerticalContentAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                ToolTip.Tip="Corner radius &amp; padding">
+                            <Canvas Width="12" Height="12">
+                                <Line StartPoint="0,3" EndPoint="12,3"
+                                      Stroke="{Binding #AdjustButton.Foreground}"
+                                      StrokeThickness="1" Opacity="0.65" />
+                                <Rectangle Canvas.Left="7" Canvas.Top="1" Width="3" Height="4"
+                                           Fill="{Binding #AdjustButton.Foreground}" Opacity="0.65" />
+                                <Line StartPoint="0,9" EndPoint="12,9"
+                                      Stroke="{Binding #AdjustButton.Foreground}"
+                                      StrokeThickness="1" Opacity="0.65" />
+                                <Rectangle Canvas.Left="2" Canvas.Top="7" Width="3" Height="4"
+                                           Fill="{Binding #AdjustButton.Foreground}" Opacity="0.65" />
+                            </Canvas>
+                            <Button.Flyout>
+                                <Flyout Placement="Bottom">
+                                    <StackPanel Width="240" Spacing="8">
+                                        <TextBlock Text="Corner radius" FontSize="11" Opacity="0.75" />
+                                        <Grid ColumnDefinitions="*,32">
+                                            <Slider x:Name="MaskSlider" Minimum="0" Maximum="100"
+                                                    VerticalAlignment="Center"
+                                                    ToolTip.Tip="0 = square, 100 = circle" />
+                                            <TextBlock x:Name="MaskValue" Grid.Column="1" Text="0"
+                                                       VerticalAlignment="Center" FontSize="11"
+                                                       Foreground="{DynamicResource AppSubTextBrush}" />
+                                        </Grid>
+                                        <TextBlock Text="Padding" FontSize="11" Opacity="0.75" />
+                                        <Grid ColumnDefinitions="*,32">
+                                            <Slider x:Name="PaddingSlider" Minimum="0" Maximum="10"
+                                                    VerticalAlignment="Center"
+                                                    ToolTip.Tip="Percent per side (floored to whole pixels)" />
+                                            <TextBlock x:Name="PaddingValue" Grid.Column="1" Text="0"
+                                                       VerticalAlignment="Center" FontSize="11"
+                                                       Foreground="{DynamicResource AppSubTextBrush}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
                         <Button x:Name="FitModeButton" MinWidth="0" MinHeight="0" Height="22" Padding="4,3"
                                 Background="{DynamicResource ButtonBackground}"
                                 BorderBrush="{DynamicResource ButtonBorderBrush}"
@@ -249,6 +281,28 @@
                                        Height="14"
                                        TextAlignment="Center"
                                        VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="FxButton" MinWidth="0" MinHeight="0" Height="22" Padding="4,3"
+                                Background="{DynamicResource ButtonBackground}"
+                                BorderBrush="{DynamicResource ButtonBorderBrush}"
+                                Foreground="{DynamicResource ButtonForeground}"
+                                VerticalContentAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                ToolTip.Tip="Shadow &amp; stroke">
+                            <Grid Width="12" Height="12">
+                                <Rectangle Width="8" Height="8"
+                                           Fill="{Binding #FxButton.Foreground}"
+                                           Opacity="0.3"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Bottom" />
+                                <Rectangle Width="8" Height="8"
+                                           Stroke="{Binding #FxButton.Foreground}"
+                                           StrokeThickness="1"
+                                           Fill="Transparent"
+                                           Opacity="0.65"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Top" />
+                            </Grid>
                         </Button>
                     </StackPanel>
                 </Grid>

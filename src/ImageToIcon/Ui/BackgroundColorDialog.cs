@@ -8,7 +8,12 @@ namespace ImageToIcon.Ui;
 
 public static class BackgroundColorDialog
 {
-    public static async Task<Color?> ShowAsync(Window owner, Color initial)
+    public static Task<Color?> ShowAsync(Window owner, Color initial)
+    {
+        return ShowAsync(owner, "Background Color", initial, true);
+    }
+
+    public static async Task<Color?> ShowAsync(Window owner, string title, Color initial, bool zeroAlphaIsCancel)
     {
         Color? picked = null;
 
@@ -56,7 +61,7 @@ public static class BackgroundColorDialog
 
         var dlg = new Window
         {
-            Title = "Background color",
+            Title = title,
             SizeToContent = SizeToContent.WidthAndHeight,
             CanResize = false,
             ShowInTaskbar = false,
@@ -68,7 +73,7 @@ public static class BackgroundColorDialog
 
         okBtn.Click += (_, _) =>
         {
-            picked = view.Color.A == 0 ? null : view.Color;
+            picked = zeroAlphaIsCancel && view.Color.A == 0 ? null : view.Color;
             dlg.Close();
         };
         cancelBtn.Click += (_, _) => dlg.Close();

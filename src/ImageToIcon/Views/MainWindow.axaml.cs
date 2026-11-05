@@ -46,6 +46,7 @@ public partial class MainWindow : Window
     private bool _debugPreview;
     private FitMode _fitMode;
     private IconThumb? _focusedThumb;
+    private ShadowOutlineState _fxState = new();
     private bool _iconIsDebug;
     private Color _lastBackgroundColor = Colors.White;
     private CancellationTokenSource? _maskDebounceCts;
@@ -102,6 +103,8 @@ public partial class MainWindow : Window
         _bgColorToggleCtrl = bgColorToggle;
         bgColorToggle.IsChecked = false;
         bgColorToggle.Click += async (_, _) => await OnBgColorToggleClickAsync();
+        var fxButton = this.FindControl<Button>("FxButton")!;
+        fxButton.Click += async (_, _) => await OnFxButtonClickAsync();
         var debugToggle = this.FindControl<ToggleButton>("DebugToggle")!;
         debugToggle.Click += (_, _) =>
         {
@@ -439,6 +442,31 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task OnFxButtonClickAsync()
+    {
+        var result = await ShadowOutlineDialog.ShowAsync(this, _fxState, RenderFxPreview);
+        if (result == null)
+            return;
+        _fxState = result;
+        RebuildThumbs(true);
+    }
+
+    private SKBitmap? RenderFxPreview(ShadowOutlineState state)
+    {
+        var src = _sourceImage;
+        if (src == null)
+            return null;
+        var previewSize = Math.Min(256, Math.Max(src.Width, src.Height));
+        try
+        {
+            return IconFactory.ResizePadded(src, previewSize, _maskRadius, _padding, _fitMode, _cropOffsetX, _cropOffsetY, _backgroundColor, state.Shadow, state.Stroke);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private async Task OnBgColorToggleClickAsync()
     {
         if (_bgColorToggleCtrl == null)
@@ -660,7 +688,7 @@ public partial class MainWindow : Window
             {
                 var (resized, preview) = await Task.Run(() =>
                 {
-                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, _backgroundColor);
+                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, _backgroundColor, _fxState.Shadow, _fxState.Stroke);
                     var p = IconThumb.ToAvaloniaBitmap(r);
                     return (r, p);
                 }, ct);
@@ -723,7 +751,7 @@ public partial class MainWindow : Window
             {
                 ct.ThrowIfCancellationRequested();
                 var thumbSource = SourceFor(thumb) ?? source;
-                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), _backgroundColor);
+                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), _backgroundColor, _fxState.Shadow, _fxState.Stroke);
                 var preview = IconThumb.ToAvaloniaBitmap(resized);
                 if (ct.IsCancellationRequested)
                 {
@@ -1052,7 +1080,7 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open image",
+            Title = "Open Image",
             AllowMultiple = false,
             FileTypeFilter = ImageLoader.BuildFilePickerFilters()
         });
@@ -1079,7 +1107,7 @@ public partial class MainWindow : Window
         var suggested = (_sourceName ?? "icon") + ".ico";
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save icon",
+            Title = "Save Icon",
             SuggestedFileName = suggested,
             DefaultExtension = "ico",
             FileTypeChoices =
@@ -1105,7 +1133,7 @@ public partial class MainWindow : Window
                 {
                     var src = SourceFor(t);
                     if (src != null)
-                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), _backgroundColor));
+                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), _backgroundColor, _fxState.Shadow, _fxState.Stroke));
                 }
             }
 
