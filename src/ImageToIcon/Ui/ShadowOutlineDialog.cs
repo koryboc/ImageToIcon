@@ -4,6 +4,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Styling;
 using ImageToIcon.Models;
 using ImageToIcon.Platform;
 using ImageToIcon.Services;
@@ -66,12 +67,13 @@ public static class ShadowOutlineDialog
             Stretch = Stretch.Uniform,
             HorizontalAlignment = HorizontalAlignment.Center
         };
+        var isDark = owner.ActualThemeVariant == ThemeVariant.Dark;
         var previewBg = new Border
         {
             Width = 208,
             Height = 208,
             CornerRadius = new CornerRadius(4),
-            Background = new SolidColorBrush(Color.FromRgb(45, 45, 48)),
+            Background = new SolidColorBrush(isDark ? Color.FromRgb(45, 45, 48) : Color.FromRgb(230, 230, 232)),
             Child = preview,
             Margin = new Thickness(0, 0, 0, 12)
         };
