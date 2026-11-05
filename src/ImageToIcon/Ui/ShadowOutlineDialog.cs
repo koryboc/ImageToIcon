@@ -121,28 +121,6 @@ public static class ShadowOutlineDialog
             UpdatePreview();
         };
 
-        Window? dlg = null;
-        var dlg1 = dlg;
-        shadowSwatch.Click += async (_, _) =>
-        {
-            if (dlg1 == null) return;
-            var picked = await BackgroundColorDialog.ShowAsync(dlg1, "Shadow Color", state.ShadowColor, false);
-            if (picked == null) return;
-            state.ShadowColor = picked.Value;
-            SetSwatch(shadowSwatch, picked.Value);
-            UpdatePreview();
-        };
-        var dlg2 = dlg;
-        strokeSwatch.Click += async (_, _) =>
-        {
-            if (dlg2 == null) return;
-            var picked = await BackgroundColorDialog.ShowAsync(dlg2, "Stroke Color", state.StrokeColor, false);
-            if (picked == null) return;
-            state.StrokeColor = picked.Value;
-            SetSwatch(strokeSwatch, picked.Value);
-            UpdatePreview();
-        };
-
         var shadowGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("80,*,32"),
@@ -190,7 +168,7 @@ public static class ShadowOutlineDialog
             Children = { previewBg, shadowGrid, strokeGrid, buttons }
         };
 
-        dlg = new Window
+        var dlg = new Window
         {
             Title = "Shadow & Stroke",
             SizeToContent = SizeToContent.WidthAndHeight,
@@ -202,6 +180,22 @@ public static class ShadowOutlineDialog
             Content = root
         };
 
+        shadowSwatch.Click += async (_, _) =>
+        {
+            var picked = await BackgroundColorDialog.ShowAsync(dlg, "Shadow Color", state.ShadowColor, false);
+            if (picked == null) return;
+            state.ShadowColor = picked.Value;
+            SetSwatch(shadowSwatch, picked.Value);
+            UpdatePreview();
+        };
+        strokeSwatch.Click += async (_, _) =>
+        {
+            var picked = await BackgroundColorDialog.ShowAsync(dlg, "Stroke Color", state.StrokeColor, false);
+            if (picked == null) return;
+            state.StrokeColor = picked.Value;
+            SetSwatch(strokeSwatch, picked.Value);
+            UpdatePreview();
+        };
         okBtn.Click += (_, _) =>
         {
             result = state;
