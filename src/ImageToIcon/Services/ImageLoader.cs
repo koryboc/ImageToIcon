@@ -26,6 +26,7 @@ public static class ImageLoader
     public static readonly Dictionary<string, string[]> Categories =
         RasterCategories.Concat(VectorCategories)
                         .Concat(IconReader.Categories)
+                        .Concat(IcnsReader.Categories)
                         .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
                         .ToDictionary(kv => kv.Key, kv => kv.Value);
 
@@ -62,6 +63,8 @@ public static class ImageLoader
                 return null;
             if (IconReader.IsSupported(path))
                 return IconReader.TryLoad(path);
+            if (IcnsReader.IsSupported(path))
+                return IcnsReader.TryLoad(path);
             return SvgLoader.IsSupported(path) ? SvgLoader.TryLoad(path) : RasterDecoder.TryLoad(path);
         }
         catch
