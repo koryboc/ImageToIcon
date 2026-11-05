@@ -59,7 +59,7 @@ public static class ChangelogDialog
         var confirmed = false;
         var dlg = new Window
         {
-            Title = "Update available",
+            Title = "Update Available",
             Width = 480,
             SizeToContent = SizeToContent.Height,
             CanResize = false,

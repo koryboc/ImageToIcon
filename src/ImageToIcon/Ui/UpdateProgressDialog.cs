@@ -41,7 +41,7 @@ public sealed class UpdateProgressDialog
 
         _dlg = new Window
         {
-            Title = "Installing update",
+            Title = "Installing Update",
             Width = 420,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
