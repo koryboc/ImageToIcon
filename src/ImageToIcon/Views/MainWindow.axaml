@@ -215,8 +215,12 @@
                                       Opacity="0.65" />
                             </Grid>
                         </ToggleButton>
-                        <ToggleButton x:Name="DebugToggle" Classes="iconbtn accenttoggle"
-                                      ToolTip.Tip="Replace frames with labeled size tiles&#x0a;so you can see which size the OS picks in each context">
+                        <ToggleButton x:Name="DebugToggle" Classes="iconbtn accenttoggle">
+                            <ToolTip.Tip>
+                                <TextBlock
+                                    Text="Replace frames with labeled size tiles so you can see which size the OS picks in each context"
+                                    TextWrapping="Wrap" MaxWidth="240" />
+                            </ToolTip.Tip>
                             <TextBlock Text="123" FontSize="9" FontWeight="Bold"
                                        Opacity="0.65"
                                        Height="12"
