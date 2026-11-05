@@ -26,9 +26,10 @@ public partial class MainWindow : Window
 {
     private const double PanThresholdPx = 4;
     private readonly ToggleButton? _bgColorToggleCtrl;
+    private readonly Canvas? _cropIconCtrl;
     private readonly CancellationTokenSource _cts = new();
+    private readonly Canvas? _fitIconCtrl;
     private readonly Button? _fitModeButtonCtrl;
-    private readonly TextBlock? _fitModeLabelCtrl;
     private readonly Slider? _maskSliderCtrl;
     private readonly TextBlock? _maskValueCtrl;
     private readonly Slider? _paddingSliderCtrl;
@@ -38,6 +39,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<SizeToggle> _sizeToggles = [];
     private readonly ItemsControl? _smallPanel;
     private readonly ObservableCollection<IconThumb> _smallThumbs = [];
+    private readonly Canvas? _stretchIconCtrl;
     private readonly ObservableCollection<IconThumb> _topThumbs = [];
     private readonly Button _updateBtn;
     private SKColor? _backgroundColor;
@@ -205,8 +207,9 @@ public partial class MainWindow : Window
         AttachSliderDragTracking(paddingSlider);
 
         var fitModeButton = this.FindControl<Button>("FitModeButton")!;
-        var fitModeLabel = this.FindControl<TextBlock>("FitModeLabel")!;
-        _fitModeLabelCtrl = fitModeLabel;
+        _fitIconCtrl = this.FindControl<Canvas>("FitIcon");
+        _stretchIconCtrl = this.FindControl<Canvas>("StretchIcon");
+        _cropIconCtrl = this.FindControl<Canvas>("CropIcon");
         _fitModeButtonCtrl = fitModeButton;
         UpdateFitModeLabel();
         fitModeButton.Click += (_, _) =>
@@ -524,16 +527,13 @@ public partial class MainWindow : Window
 
     private void UpdateFitModeLabel()
     {
-        if (_fitModeLabelCtrl == null)
+        if (_fitModeButtonCtrl == null)
             return;
         var mode = _focusedThumb != null ? _focusedThumb.FitModeOverride ?? _fitMode : _fitMode;
-        _fitModeLabelCtrl.Text = mode switch
-        {
-            FitMode.Stretch => "⇆",
-            FitMode.Crop => "⌗",
-            _ => "⛶"
-        };
-        ToolTip.SetTip(_fitModeLabelCtrl, mode switch
+        _fitIconCtrl?.IsVisible = mode == FitMode.Fit;
+        _stretchIconCtrl?.IsVisible = mode == FitMode.Stretch;
+        _cropIconCtrl?.IsVisible = mode == FitMode.Crop;
+        ToolTip.SetTip(_fitModeButtonCtrl, mode switch
         {
             FitMode.Stretch => "Stretch to fill",
             FitMode.Crop => "Crop to fill",
@@ -557,7 +557,6 @@ public partial class MainWindow : Window
         ApplyFocusClass(_paddingSliderCtrl, on);
         ApplyFocusClass(_paddingValueCtrl, on);
         ApplyFocusClass(_fitModeButtonCtrl, on);
-        ApplyFocusClass(_fitModeLabelCtrl, on);
         UpdateFitModeAvailability();
     }
 

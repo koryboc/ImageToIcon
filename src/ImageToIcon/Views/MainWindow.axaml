@@ -276,11 +276,40 @@
                                 Foreground="{DynamicResource ButtonForeground}"
                                 VerticalContentAlignment="Center"
                                 HorizontalContentAlignment="Center">
-                            <TextBlock x:Name="FitModeLabel" Text="⛶" FontSize="12"
-                                       Opacity="0.65"
-                                       Height="14"
-                                       TextAlignment="Center"
-                                       VerticalAlignment="Center" />
+                            <Panel Width="12" Height="12">
+                                <Canvas x:Name="FitIcon" Width="12" Height="12">
+                                    <Rectangle Canvas.Left="0" Canvas.Top="0" Width="12" Height="12"
+                                               Stroke="{Binding #FitModeButton.Foreground}"
+                                               StrokeThickness="1" Opacity="0.65" />
+                                    <Rectangle Canvas.Left="3" Canvas.Top="3" Width="6" Height="6"
+                                               Stroke="{Binding #FitModeButton.Foreground}"
+                                               StrokeThickness="1" Opacity="0.65" />
+                                </Canvas>
+                                <Canvas x:Name="StretchIcon" Width="12" Height="12" IsVisible="False">
+                                    <Polygon Points="0,0 5,0 0,5"
+                                             Fill="{Binding #FitModeButton.Foreground}" Opacity="0.65" />
+                                    <Polygon Points="12,0 7,0 12,5"
+                                             Fill="{Binding #FitModeButton.Foreground}" Opacity="0.65" />
+                                    <Polygon Points="0,12 5,12 0,7"
+                                             Fill="{Binding #FitModeButton.Foreground}" Opacity="0.65" />
+                                    <Polygon Points="12,12 7,12 12,7"
+                                             Fill="{Binding #FitModeButton.Foreground}" Opacity="0.65" />
+                                </Canvas>
+                                <Canvas x:Name="CropIcon" Width="12" Height="12" IsVisible="False">
+                                    <Line StartPoint="0,0" EndPoint="6,0"
+                                          Stroke="{Binding #FitModeButton.Foreground}"
+                                          StrokeThickness="1.5" Opacity="0.65" />
+                                    <Line StartPoint="0,0" EndPoint="0,6"
+                                          Stroke="{Binding #FitModeButton.Foreground}"
+                                          StrokeThickness="1.5" Opacity="0.65" />
+                                    <Line StartPoint="12,12" EndPoint="6,12"
+                                          Stroke="{Binding #FitModeButton.Foreground}"
+                                          StrokeThickness="1.5" Opacity="0.65" />
+                                    <Line StartPoint="12,12" EndPoint="12,6"
+                                          Stroke="{Binding #FitModeButton.Foreground}"
+                                          StrokeThickness="1.5" Opacity="0.65" />
+                                </Canvas>
+                            </Panel>
                         </Button>
                         <Button x:Name="FxButton" MinWidth="0" MinHeight="0" Height="22" Padding="4,3"
                                 Background="{DynamicResource ButtonBackground}"
