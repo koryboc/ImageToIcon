@@ -17,12 +17,12 @@ public sealed class ShadowOutlineState
     public bool ShadowEnabled { get; set; }
     public Color ShadowColor { get; set; } = Color.FromArgb(160, 0, 0, 0);
     public double ShadowOffsetX { get; set; }
-    public double ShadowOffsetY { get; set; } = 0.03;
-    public double ShadowBlur { get; set; } = 0.04;
+    public double ShadowOffsetY { get; set; } = 0.01;
+    public double ShadowBlur { get; set; } = 0.02;
 
     public bool StrokeEnabled { get; set; }
     public Color StrokeColor { get; set; } = Color.FromArgb(255, 0, 0, 0);
-    public double StrokeWidth { get; set; } = 0.02;
+    public double StrokeWidth { get; set; } = 0.01;
 
     public bool AnyEnabled => ShadowEnabled || StrokeEnabled;
 
