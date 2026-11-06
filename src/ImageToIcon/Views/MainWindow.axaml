@@ -153,9 +153,10 @@
                         PointerMoved="OnThumbPointerMoved"
                         PointerReleased="OnThumbPointerReleased"
                         PointerCaptureLost="OnThumbPointerCaptureLost"
+                        PointerWheelChanged="OnThumbPointerWheel"
                         DragDrop.AllowDrop="True">
                 <Grid Width="{Binding DisplaySize}" Height="{Binding DisplaySize}" HorizontalAlignment="Center"
-                      ToolTip.Tip="Left-click: replace image&#x0a;Right-click: toggle focus&#x0a;Drag (crop mode): pan">
+                      ToolTip.Tip="Left-click: replace image&#x0a;Right-click: toggle focus&#x0a;Drag (crop mode): pan&#x0a;Wheel (crop mode): zoom">
                     <Image Source="{Binding Preview}" Stretch="Fill" />
                     <Rectangle Stroke="{DynamicResource AppThumbBorderBrush}"
                                StrokeThickness="1"

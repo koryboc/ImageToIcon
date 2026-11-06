@@ -46,6 +46,7 @@ public partial class MainWindow : Window
     private SKColor? _backgroundColor;
     private double _cropOffsetX;
     private double _cropOffsetY;
+    private double _cropZoom = 1;
     private bool _debugPreview;
     private FitMode _fitMode;
     private IconThumb? _focusedThumb;
@@ -66,6 +67,7 @@ public partial class MainWindow : Window
     private SKColor? _savedBackgroundColor;
     private double _savedCropOffsetX;
     private double _savedCropOffsetY;
+    private double _savedCropZoom = 1;
     private FitMode _savedFitMode;
     private IconThumb? _savedFocusedThumb;
     private ShadowOutlineState? _savedFxState;
@@ -78,6 +80,8 @@ public partial class MainWindow : Window
     private string? _sourceName;
     private bool _suppressTopFrameSync;
     private TrayIcon? _trayIcon;
+
+    private CancellationTokenSource? _zoomDebounceCts;
 
     public MainWindow() : this(null)
     {
@@ -125,6 +129,7 @@ public partial class MainWindow : Window
                     _savedFitMode = _fitMode;
                     _savedCropOffsetX = _cropOffsetX;
                     _savedCropOffsetY = _cropOffsetY;
+                    _savedCropZoom = _cropZoom;
                     _savedBackgroundColor = _backgroundColor;
                     _savedFxState = _fxState.Clone();
                     _backgroundColor = null;
@@ -145,6 +150,7 @@ public partial class MainWindow : Window
                     _fitMode = _savedFitMode;
                     _cropOffsetX = _savedCropOffsetX;
                     _cropOffsetY = _savedCropOffsetY;
+                    _cropZoom = _savedCropZoom;
                     _backgroundColor = _savedBackgroundColor;
                     _fxState = _savedFxState ?? new ShadowOutlineState();
                     _savedFxState = null;
@@ -498,7 +504,7 @@ public partial class MainWindow : Window
         var previewSize = Math.Min(256, Math.Max(src.Width, src.Height));
         try
         {
-            return IconFactory.ResizePadded(src, previewSize, _maskRadius, _padding, _fitMode, _cropOffsetX, _cropOffsetY, _backgroundColor, state.Shadow, state.Stroke);
+            return IconFactory.ResizePadded(src, previewSize, _maskRadius, _padding, _fitMode, _cropOffsetX, _cropOffsetY, _cropZoom, _backgroundColor, state.Shadow, state.Stroke);
         }
         catch
         {
@@ -720,11 +726,12 @@ public partial class MainWindow : Window
             var liveFit = FitModeFor(live);
             var liveCx = CropXFor(live);
             var liveCy = CropYFor(live);
+            var liveZoom = ZoomFor(live);
             try
             {
                 var (resized, preview) = await Task.Run(() =>
                 {
-                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, _backgroundColor, _fxState.Shadow, _fxState.Stroke);
+                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, liveZoom, _backgroundColor, _fxState.Shadow, _fxState.Stroke);
                     var p = IconThumb.ToAvaloniaBitmap(r);
                     return (r, p);
                 }, ct);
@@ -787,7 +794,7 @@ public partial class MainWindow : Window
             {
                 ct.ThrowIfCancellationRequested();
                 var thumbSource = SourceFor(thumb) ?? source;
-                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), _backgroundColor, _fxState.Shadow, _fxState.Stroke);
+                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), ZoomFor(thumb), _backgroundColor, _fxState.Shadow, _fxState.Stroke);
                 var preview = IconThumb.ToAvaloniaBitmap(resized);
                 if (ct.IsCancellationRequested)
                 {
@@ -1087,6 +1094,11 @@ public partial class MainWindow : Window
         return t.CropOffsetYOverride ?? _cropOffsetY;
     }
 
+    private double ZoomFor(IconThumb t)
+    {
+        return t.CropZoomOverride ?? _cropZoom;
+    }
+
     private SKBitmap? SourceFor(IconThumb t)
     {
         return t.OverrideSource ?? _sourceImage;
@@ -1109,6 +1121,7 @@ public partial class MainWindow : Window
         t.FitModeOverride ??= _fitMode;
         t.CropOffsetXOverride ??= _cropOffsetX;
         t.CropOffsetYOverride ??= _cropOffsetY;
+        t.CropZoomOverride ??= _cropZoom;
         t.NotifyOverridesChanged();
     }
 
@@ -1169,7 +1182,7 @@ public partial class MainWindow : Window
                 {
                     var src = SourceFor(t);
                     if (src != null)
-                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), _backgroundColor, _fxState.Shadow, _fxState.Stroke));
+                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), ZoomFor(t), _backgroundColor, _fxState.Shadow, _fxState.Stroke));
                 }
             }
 
@@ -1338,7 +1351,8 @@ public partial class MainWindow : Window
         var pad = PaddingFor(thumb);
         var padPx = (int)(Math.Clamp(pad, 0, 1) * thumb.Size);
         var inner = Math.Max(1, thumb.Size - 2 * padPx);
-        var cover = Math.Max((double)inner / panSource.Width, (double)inner / panSource.Height);
+        var zoom = Math.Max(1.0, ZoomFor(thumb));
+        var cover = Math.Max((double)inner / panSource.Width, (double)inner / panSource.Height) * zoom;
         var w = panSource.Width * cover;
         var h = panSource.Height * cover;
         var overflowX = Math.Max(1e-6, w - inner);
@@ -1365,6 +1379,70 @@ public partial class MainWindow : Window
         }
 
         RebuildThumbs();
+    }
+
+    private void OnThumbPointerWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (sender is not Control { Tag: IconThumb thumb })
+            return;
+        if (FitModeFor(thumb) != FitMode.Crop)
+            return;
+        var step = e.Delta.Y >= 0 ? 1.1 : 1 / 1.1;
+        var current = ZoomFor(thumb);
+        var next = Math.Clamp(current * step, 1.0, 10.0);
+        if (Math.Abs(next - current) < 1e-4)
+            return;
+
+        if (_focusedThumb == thumb)
+        {
+            thumb.CropZoomOverride = next;
+            thumb.NotifyOverridesChanged();
+        }
+        else if (thumb.IsDecoupled)
+        {
+            thumb.CropZoomOverride = next;
+        }
+        else
+        {
+            _cropZoom = next;
+        }
+
+        if (next <= 1.0)
+        {
+            if (_focusedThumb == thumb || thumb.IsDecoupled)
+            {
+                thumb.CropOffsetXOverride = 0;
+                thumb.CropOffsetYOverride = 0;
+            }
+            else
+            {
+                _cropOffsetX = 0;
+                _cropOffsetY = 0;
+            }
+        }
+
+        e.Handled = true;
+        _sliderDragging = true;
+        RebuildThumbs();
+        DebouncedZoomRebuild();
+    }
+
+    private void DebouncedZoomRebuild()
+    {
+        _zoomDebounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _zoomDebounceCts = cts;
+        _ = Task.Delay(150, cts.Token).ContinueWith(t =>
+        {
+            if (t.IsCanceled)
+                return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (cts.IsCancellationRequested)
+                    return;
+                OnSliderReleased();
+            });
+        }, TaskScheduler.Default);
     }
 
     private async void OnThumbPointerReleased(object? sender, PointerReleasedEventArgs e)

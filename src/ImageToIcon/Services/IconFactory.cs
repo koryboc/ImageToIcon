@@ -30,17 +30,17 @@ public static class IconFactory
         256, 48, 32, 24, 16
     ];
 
-    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null)
+    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null)
     {
         var maxDim = Math.Max(source.Width, source.Height);
         foreach (var s in sizes.OrderByDescending(x => x))
         {
             if (s > maxDim || s < MinSize || s > MaxSize) continue;
-            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY, background, shadow, stroke);
+            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY, cropZoom, background, shadow, stroke);
         }
     }
 
-    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null)
+    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null)
     {
         var padPx = (int)(Math.Clamp(padding, 0, 1) * size);
         var inner = Math.Max(1, size - 2 * padPx);
@@ -56,7 +56,8 @@ public static class IconFactory
                 dy = padPx;
                 break;
             case FitMode.Crop:
-                var cover = Math.Max((double)inner / source.Width, (double)inner / source.Height);
+                var zoom = Math.Max(1.0, cropZoom);
+                var cover = Math.Max((double)inner / source.Width, (double)inner / source.Height) * zoom;
                 w = Math.Max(1, (int)Math.Round(source.Width * cover));
                 h = Math.Max(1, (int)Math.Round(source.Height * cover));
                 var panX = Math.Clamp(cropOffsetX, -1.0, 1.0);

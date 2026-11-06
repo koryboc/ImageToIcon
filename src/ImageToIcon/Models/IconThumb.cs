@@ -21,13 +21,15 @@ public class IconThumb(int size) : INotifyPropertyChanged
     public FitMode? FitModeOverride { get; set; }
     public double? CropOffsetXOverride { get; set; }
     public double? CropOffsetYOverride { get; set; }
+    public double? CropZoomOverride { get; set; }
 
     public bool IsDecoupled => OverrideSource != null
                                || MaskRadiusOverride.HasValue
                                || PaddingOverride.HasValue
                                || FitModeOverride.HasValue
                                || CropOffsetXOverride.HasValue
-                               || CropOffsetYOverride.HasValue;
+                               || CropOffsetYOverride.HasValue
+                               || CropZoomOverride.HasValue;
 
     public bool IsFocused
     {
@@ -116,6 +118,7 @@ public class IconThumb(int size) : INotifyPropertyChanged
         FitModeOverride = null;
         CropOffsetXOverride = null;
         CropOffsetYOverride = null;
+        CropZoomOverride = null;
         Raise(nameof(OverrideSource));
         Raise(nameof(IsDecoupled));
         old?.Dispose();
