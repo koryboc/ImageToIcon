@@ -142,31 +142,41 @@ public static class ShadowOutlineFlyout
             ShowMode = FlyoutShowMode.Transient
         };
 
-        shadowSwatch.Click += async (_, _) =>
+        async Task PickColor(Button swatch, string title, Color current, Action<Color> commit)
         {
             var host = TopLevel.GetTopLevel(anchor) as Window;
             if (host == null) return;
-            var picked = await BackgroundColorDialog.ShowAsync(host, "Shadow Color", state.ShadowColor, false);
-            if (picked == null) return;
-            state.ShadowColor = picked.Value;
-            SetSwatch(shadowSwatch, picked.Value);
-            if (shadowEnable.IsChecked != true)
-                shadowEnable.IsChecked = true;
-            else
-                Changed();
+            var picked = await BackgroundColorDialog.ShowAsync(host, title, current, false);
+            if (picked != null)
+            {
+                commit(picked.Value);
+                SetSwatch(swatch, picked.Value);
+            }
+
+            flyout.ShowAt(anchor);
+        }
+
+        shadowSwatch.Click += async (_, _) =>
+        {
+            await PickColor(shadowSwatch, "Shadow Color", state.ShadowColor, c =>
+            {
+                state.ShadowColor = c;
+                if (shadowEnable.IsChecked != true)
+                    shadowEnable.IsChecked = true;
+                else
+                    Changed();
+            });
         };
         strokeSwatch.Click += async (_, _) =>
         {
-            var host = TopLevel.GetTopLevel(anchor) as Window;
-            if (host == null) return;
-            var picked = await BackgroundColorDialog.ShowAsync(host, "Stroke Color", state.StrokeColor, false);
-            if (picked == null) return;
-            state.StrokeColor = picked.Value;
-            SetSwatch(strokeSwatch, picked.Value);
-            if (strokeEnable.IsChecked != true)
-                strokeEnable.IsChecked = true;
-            else
-                Changed();
+            await PickColor(strokeSwatch, "Stroke Color", state.StrokeColor, c =>
+            {
+                state.StrokeColor = c;
+                if (strokeEnable.IsChecked != true)
+                    strokeEnable.IsChecked = true;
+                else
+                    Changed();
+            });
         };
 
         flyout.ShowAt(anchor);
