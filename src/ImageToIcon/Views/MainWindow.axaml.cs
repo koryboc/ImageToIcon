@@ -490,21 +490,27 @@ public partial class MainWindow : Window
             IsColorPaletteVisible = true,
             IsColorPreviewVisible = true,
             IsAccentColorsVisible = false,
-            Width = 320,
-            Height = 380
+            Width = 360,
+            Height = 420
+        };
+
+        var viewScaled = new LayoutTransformControl
+        {
+            LayoutTransform = new ScaleTransform(0.8, 0.8),
+            Child = view
         };
 
         var clearBtn = new Button
         {
             Content = "Clear",
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 10, 10),
+            Margin = new Thickness(0, 0, 10, 6),
             IsEnabled = _backgroundColor.HasValue
         };
 
         var panel = new StackPanel
         {
-            Children = { view, clearBtn }
+            Children = { viewScaled, clearBtn }
         };
 
         var flyout = new Flyout

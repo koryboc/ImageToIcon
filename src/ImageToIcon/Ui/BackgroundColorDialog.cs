@@ -28,6 +28,12 @@ public static class BackgroundColorDialog
             Height = 420
         };
 
+        var viewScaled = new LayoutTransformControl
+        {
+            LayoutTransform = new ScaleTransform(0.8, 0.8),
+            Child = view
+        };
+
         var okBtn = new Button
         {
             Content = "OK",
@@ -56,7 +62,7 @@ public static class BackgroundColorDialog
         {
             Margin = new Thickness(16),
             Spacing = 8,
-            Children = { view, buttons }
+            Children = { viewScaled, buttons }
         };
 
         var dlg = new Window

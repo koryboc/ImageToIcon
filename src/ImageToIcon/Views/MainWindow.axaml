@@ -280,26 +280,29 @@
                             </Canvas>
                             <Button.Flyout>
                                 <Flyout Placement="Bottom">
-                                    <StackPanel Width="240" Spacing="8">
-                                        <TextBlock Text="Corner radius" FontSize="11" Opacity="0.75" />
-                                        <Grid ColumnDefinitions="*,32">
-                                            <Slider x:Name="MaskSlider" Minimum="0" Maximum="100"
-                                                    VerticalAlignment="Center"
-                                                    ToolTip.Tip="0 = square, 100 = circle" />
-                                            <TextBlock x:Name="MaskValue" Grid.Column="1" Text="0"
-                                                       VerticalAlignment="Center" FontSize="11"
-                                                       Foreground="{DynamicResource AppSubTextBrush}" />
-                                        </Grid>
-                                        <TextBlock Text="Padding" FontSize="11" Opacity="0.75" />
-                                        <Grid ColumnDefinitions="*,32">
-                                            <Slider x:Name="PaddingSlider" Minimum="0" Maximum="10"
-                                                    VerticalAlignment="Center"
-                                                    ToolTip.Tip="Percent per side (floored to whole pixels)" />
-                                            <TextBlock x:Name="PaddingValue" Grid.Column="1" Text="0"
-                                                       VerticalAlignment="Center" FontSize="11"
-                                                       Foreground="{DynamicResource AppSubTextBrush}" />
-                                        </Grid>
-                                    </StackPanel>
+                                    <Grid Width="240"
+                                          ColumnDefinitions="60,*,28"
+                                          RowDefinitions="Auto,Auto"
+                                          RowSpacing="2" ColumnSpacing="6">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Corner"
+                                                   VerticalAlignment="Center" FontSize="11" />
+                                        <Slider x:Name="MaskSlider" Grid.Row="0" Grid.Column="1"
+                                                Classes="compact" Minimum="0" Maximum="100"
+                                                VerticalAlignment="Center"
+                                                ToolTip.Tip="0 = square, 100 = circle" />
+                                        <TextBlock x:Name="MaskValue" Grid.Row="0" Grid.Column="2" Text="0"
+                                                   MinWidth="28" VerticalAlignment="Center" FontSize="11"
+                                                   Foreground="{DynamicResource AppSubTextBrush}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Padding"
+                                                   VerticalAlignment="Center" FontSize="11" />
+                                        <Slider x:Name="PaddingSlider" Grid.Row="1" Grid.Column="1"
+                                                Classes="compact" Minimum="0" Maximum="10"
+                                                VerticalAlignment="Center"
+                                                ToolTip.Tip="Percent per side (floored to whole pixels)" />
+                                        <TextBlock x:Name="PaddingValue" Grid.Row="1" Grid.Column="2" Text="0"
+                                                   MinWidth="28" VerticalAlignment="Center" FontSize="11"
+                                                   Foreground="{DynamicResource AppSubTextBrush}" />
+                                    </Grid>
                                 </Flyout>
                             </Button.Flyout>
                         </Button>
