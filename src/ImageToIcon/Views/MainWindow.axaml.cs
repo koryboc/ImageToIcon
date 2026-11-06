@@ -516,7 +516,7 @@ public partial class MainWindow : Window
         var flyout = new Flyout
         {
             Content = panel,
-            Placement = PlacementMode.Bottom,
+            Placement = PlacementMode.BottomEdgeAlignedRight,
             ShowMode = FlyoutShowMode.Transient
         };
 

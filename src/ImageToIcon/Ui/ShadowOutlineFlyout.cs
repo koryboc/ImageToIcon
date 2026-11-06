@@ -138,14 +138,14 @@ public static class ShadowOutlineFlyout
         var flyout = new Flyout
         {
             Content = root,
-            Placement = PlacementMode.Bottom,
+            Placement = PlacementMode.BottomEdgeAlignedLeft,
             ShowMode = FlyoutShowMode.Transient
         };
 
         async Task PickColor(Button swatch, string title, Color current, Action<Color> commit)
         {
-            var host = TopLevel.GetTopLevel(anchor) as Window;
-            if (host == null) return;
+            if (TopLevel.GetTopLevel(anchor) is not Window host)
+                return;
             var picked = await BackgroundColorDialog.ShowAsync(host, title, current, false);
             if (picked != null)
             {
