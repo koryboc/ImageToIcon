@@ -49,12 +49,58 @@ public class Settings
     {
         try
         {
-            File.WriteAllText(ConfigPath, JsonSerializer.Serialize(this, SettingsJsonContext.Default.Settings));
+            var def = new Settings();
+            using var stream = File.Create(ConfigPath);
+            using var w = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+            w.WriteStartObject();
+
+            if (!SelectedSizes.SequenceEqual(def.SelectedSizes))
+            {
+                w.WriteStartArray(nameof(SelectedSizes));
+                foreach (var v in SelectedSizes) w.WriteNumberValue(v);
+                w.WriteEndArray();
+            }
+
+            if (!CustomSizes.SequenceEqual(def.CustomSizes))
+            {
+                w.WriteStartArray(nameof(CustomSizes));
+                foreach (var v in CustomSizes) w.WriteNumberValue(v);
+                w.WriteEndArray();
+            }
+
+            if (ShowThumbBorders != def.ShowThumbBorders)
+                w.WriteBoolean(nameof(ShowThumbBorders), ShowThumbBorders);
+
+            WriteDouble(w, nameof(CornerRadius), CornerRadius, def.CornerRadius);
+            WriteDouble(w, nameof(Padding), Padding, def.Padding);
+            if (ShadowColor != def.ShadowColor)
+                w.WriteNumber(nameof(ShadowColor), ShadowColor);
+            WriteDouble(w, nameof(ShadowOffsetX), ShadowOffsetX, def.ShadowOffsetX);
+            WriteDouble(w, nameof(ShadowOffsetY), ShadowOffsetY, def.ShadowOffsetY);
+            WriteDouble(w, nameof(ShadowBlur), ShadowBlur, def.ShadowBlur);
+            if (StrokeColor != def.StrokeColor)
+                w.WriteNumber(nameof(StrokeColor), StrokeColor);
+            WriteDouble(w, nameof(StrokeWidth), StrokeWidth, def.StrokeWidth);
+
+            if (LastUpdateCheckUtc != def.LastUpdateCheckUtc)
+                w.WriteString(nameof(LastUpdateCheckUtc), LastUpdateCheckUtc);
+            if (PendingUpdateVersion != def.PendingUpdateVersion)
+                w.WriteString(nameof(PendingUpdateVersion), PendingUpdateVersion);
+
+            w.WriteEndObject();
         }
         catch
         {
             // ignored
         }
+    }
+
+    private static void WriteDouble(Utf8JsonWriter w, string name, double value, double defaultValue)
+    {
+        var rounded = Math.Round(value, 2);
+        if (Math.Abs(rounded - Math.Round(defaultValue, 2)) < 1e-9)
+            return;
+        w.WriteNumber(name, rounded);
     }
 }
 

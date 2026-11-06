@@ -54,7 +54,11 @@ public static class ShadowOutlineFlyout
         Action onChanged)
     {
         var defaults = new ShadowOutlineState();
-        static int Pct(double v) => (int)Math.Round(v * 100.0);
+
+        static int Pct(double v)
+        {
+            return (int)Math.Round(v * 100.0);
+        }
 
         bool ShadowAtDefault()
         {
