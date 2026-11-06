@@ -118,9 +118,28 @@
         <Style Selector="Slider.focusMode">
             <Setter Property="Foreground" Value="Orange" />
         </Style>
+        <Style Selector="Slider.focusMode /template/ Thumb">
+            <Setter Property="Background" Value="Orange" />
+            <Setter Property="BorderBrush" Value="Orange" />
+        </Style>
+        <Style Selector="Slider.focusMode /template/ Border#TrackBackground">
+            <Setter Property="Background" Value="Orange" />
+        </Style>
         <Style Selector="Button.focusMode">
             <Setter Property="Foreground" Value="Orange" />
             <Setter Property="BorderBrush" Value="Orange" />
+        </Style>
+        <Style Selector=":is(Shape).iconStroke">
+            <Setter Property="Stroke" Value="{DynamicResource ButtonForeground}" />
+        </Style>
+        <Style Selector=":is(Shape).iconFill">
+            <Setter Property="Fill" Value="{DynamicResource ButtonForeground}" />
+        </Style>
+        <Style Selector="Button.focusMode :is(Shape).iconStroke">
+            <Setter Property="Stroke" Value="Orange" />
+        </Style>
+        <Style Selector="Button.focusMode :is(Shape).iconFill">
+            <Setter Property="Fill" Value="Orange" />
         </Style>
     </Window.Styles>
 
@@ -238,16 +257,14 @@
                                 HorizontalContentAlignment="Center"
                                 ToolTip.Tip="Corner radius &amp; padding">
                             <Canvas Width="12" Height="12">
-                                <Line StartPoint="0,3" EndPoint="12,3"
-                                      Stroke="{Binding #AdjustButton.Foreground}"
+                                <Line Classes="iconStroke" StartPoint="0,3" EndPoint="12,3"
                                       StrokeThickness="1" Opacity="0.65" />
-                                <Rectangle Canvas.Left="7" Canvas.Top="1" Width="3" Height="4"
-                                           Fill="{Binding #AdjustButton.Foreground}" Opacity="0.65" />
-                                <Line StartPoint="0,9" EndPoint="12,9"
-                                      Stroke="{Binding #AdjustButton.Foreground}"
+                                <Rectangle Classes="iconFill" Canvas.Left="7" Canvas.Top="1" Width="3" Height="4"
+                                           Opacity="0.65" />
+                                <Line Classes="iconStroke" StartPoint="0,9" EndPoint="12,9"
                                       StrokeThickness="1" Opacity="0.65" />
-                                <Rectangle Canvas.Left="2" Canvas.Top="7" Width="3" Height="4"
-                                           Fill="{Binding #AdjustButton.Foreground}" Opacity="0.65" />
+                                <Rectangle Classes="iconFill" Canvas.Left="2" Canvas.Top="7" Width="3" Height="4"
+                                           Opacity="0.65" />
                             </Canvas>
                             <Button.Flyout>
                                 <Flyout Placement="Bottom">
@@ -282,35 +299,26 @@
                                 HorizontalContentAlignment="Center">
                             <Panel Width="12" Height="12">
                                 <Canvas x:Name="FitIcon" Width="12" Height="12">
-                                    <Rectangle Canvas.Left="0" Canvas.Top="0" Width="12" Height="12"
-                                               Stroke="{Binding #FitModeButton.Foreground}"
+                                    <Rectangle Classes="iconStroke" Canvas.Left="0" Canvas.Top="0" Width="12"
+                                               Height="12"
                                                StrokeThickness="1" Opacity="0.65" />
-                                    <Rectangle Canvas.Left="3" Canvas.Top="3" Width="6" Height="6"
-                                               Stroke="{Binding #FitModeButton.Foreground}"
+                                    <Rectangle Classes="iconStroke" Canvas.Left="3" Canvas.Top="3" Width="6" Height="6"
                                                StrokeThickness="1" Opacity="0.65" />
                                 </Canvas>
                                 <Canvas x:Name="StretchIcon" Width="12" Height="12" IsVisible="False">
-                                    <Polygon Points="0,0 5,0 0,5"
-                                             Fill="{Binding #FitModeButton.Foreground}" Opacity="0.65" />
-                                    <Polygon Points="12,0 7,0 12,5"
-                                             Fill="{Binding #FitModeButton.Foreground}" Opacity="0.65" />
-                                    <Polygon Points="0,12 5,12 0,7"
-                                             Fill="{Binding #FitModeButton.Foreground}" Opacity="0.65" />
-                                    <Polygon Points="12,12 7,12 12,7"
-                                             Fill="{Binding #FitModeButton.Foreground}" Opacity="0.65" />
+                                    <Polygon Classes="iconFill" Points="0,0 5,0 0,5" Opacity="0.65" />
+                                    <Polygon Classes="iconFill" Points="12,0 7,0 12,5" Opacity="0.65" />
+                                    <Polygon Classes="iconFill" Points="0,12 5,12 0,7" Opacity="0.65" />
+                                    <Polygon Classes="iconFill" Points="12,12 7,12 12,7" Opacity="0.65" />
                                 </Canvas>
                                 <Canvas x:Name="CropIcon" Width="12" Height="12" IsVisible="False">
-                                    <Line StartPoint="0,0" EndPoint="6,0"
-                                          Stroke="{Binding #FitModeButton.Foreground}"
+                                    <Line Classes="iconStroke" StartPoint="0,0" EndPoint="6,0"
                                           StrokeThickness="1.5" Opacity="0.65" />
-                                    <Line StartPoint="0,0" EndPoint="0,6"
-                                          Stroke="{Binding #FitModeButton.Foreground}"
+                                    <Line Classes="iconStroke" StartPoint="0,0" EndPoint="0,6"
                                           StrokeThickness="1.5" Opacity="0.65" />
-                                    <Line StartPoint="12,12" EndPoint="6,12"
-                                          Stroke="{Binding #FitModeButton.Foreground}"
+                                    <Line Classes="iconStroke" StartPoint="12,12" EndPoint="6,12"
                                           StrokeThickness="1.5" Opacity="0.65" />
-                                    <Line StartPoint="12,12" EndPoint="12,6"
-                                          Stroke="{Binding #FitModeButton.Foreground}"
+                                    <Line Classes="iconStroke" StartPoint="12,12" EndPoint="12,6"
                                           StrokeThickness="1.5" Opacity="0.65" />
                                 </Canvas>
                             </Panel>

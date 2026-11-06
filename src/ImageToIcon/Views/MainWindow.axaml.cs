@@ -25,6 +25,7 @@ namespace ImageToIcon.Views;
 public partial class MainWindow : Window
 {
     private const double PanThresholdPx = 4;
+    private readonly Button? _adjustButtonCtrl;
     private readonly ToggleButton? _bgColorToggleCtrl;
     private readonly Canvas? _cropIconCtrl;
     private readonly CancellationTokenSource _cts = new();
@@ -239,6 +240,7 @@ public partial class MainWindow : Window
         _stretchIconCtrl = this.FindControl<Canvas>("StretchIcon");
         _cropIconCtrl = this.FindControl<Canvas>("CropIcon");
         _fitModeButtonCtrl = fitModeButton;
+        _adjustButtonCtrl = this.FindControl<Button>("AdjustButton");
         UpdateFitModeLabel();
         fitModeButton.Click += (_, _) =>
         {
@@ -591,6 +593,7 @@ public partial class MainWindow : Window
         ApplyFocusClass(_paddingSliderCtrl, on);
         ApplyFocusClass(_paddingValueCtrl, on);
         ApplyFocusClass(_fitModeButtonCtrl, on);
+        ApplyFocusClass(_adjustButtonCtrl, on);
         UpdateFitModeAvailability();
     }
 
@@ -1387,9 +1390,9 @@ public partial class MainWindow : Window
                 AllowMultiple = false,
                 FileTypeFilter = ImageLoader.BuildFilePickerFilters()
             });
-            var file = files.FirstOrDefault();
-            if (file == null)
+            if (files.Count == 0)
                 return;
+            var file = files[0];
             var img = ImageLoader.TryLoad(file.Path.LocalPath);
             if (img == null)
                 return;
