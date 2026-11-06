@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -26,7 +27,7 @@ public partial class MainWindow : Window
 {
     private const double PanThresholdPx = 4;
     private readonly Button? _adjustButtonCtrl;
-    private readonly ToggleButton? _bgColorToggleCtrl;
+    private readonly Button? _bgColorToggleCtrl;
     private readonly Canvas? _cropIconCtrl;
     private readonly CancellationTokenSource _cts = new();
     private readonly Canvas? _fitIconCtrl;
@@ -44,6 +45,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<IconThumb> _topThumbs = [];
     private readonly Button _updateBtn;
     private SKColor? _backgroundColor;
+    private CancellationTokenSource? _bgDebounceCts;
     private double _cropOffsetX;
     private double _cropOffsetY;
     private double _cropZoom = 1;
@@ -109,10 +111,9 @@ public partial class MainWindow : Window
         var toggles = this.FindControl<ItemsControl>("SizeToggles")!;
         var borderToggle = this.FindControl<ToggleButton>("BorderToggle")!;
         borderToggle.IsChecked = _settings.ShowThumbBorders;
-        var bgColorToggle = this.FindControl<ToggleButton>("BgColorToggle")!;
+        var bgColorToggle = this.FindControl<Button>("BgColorToggle")!;
         _bgColorToggleCtrl = bgColorToggle;
-        bgColorToggle.IsChecked = false;
-        bgColorToggle.Click += async (_, _) => await OnBgColorToggleClickAsync();
+        bgColorToggle.Click += (_, _) => ShowBackgroundColorFlyout();
         var fxButton = this.FindControl<Button>("FxButton")!;
         fxButton.Click += async (_, _) => await OnFxButtonClickAsync();
         var debugToggle = this.FindControl<ToggleButton>("DebugToggle")!;
@@ -135,11 +136,7 @@ public partial class MainWindow : Window
                     _savedFxState = _fxState.Clone();
                     _backgroundColor = null;
                     _fxState = new ShadowOutlineState();
-                    if (_bgColorToggleCtrl != null)
-                    {
-                        _bgColorToggleCtrl.IsChecked = false;
-                        _bgColorToggleCtrl.IsEnabled = false;
-                    }
+                    _bgColorToggleCtrl?.IsEnabled = false;
 
                     fxButton.IsEnabled = false;
                     break;
@@ -155,11 +152,7 @@ public partial class MainWindow : Window
                     _backgroundColor = _savedBackgroundColor;
                     _fxState = _savedFxState ?? new ShadowOutlineState();
                     _savedFxState = null;
-                    if (_bgColorToggleCtrl != null)
-                    {
-                        _bgColorToggleCtrl.IsEnabled = true;
-                        _bgColorToggleCtrl.IsChecked = _backgroundColor.HasValue;
-                    }
+                    _bgColorToggleCtrl?.IsEnabled = true;
 
                     fxButton.IsEnabled = true;
                     _maskSliderCtrl?.Value = _maskRadius * 100;
@@ -482,10 +475,7 @@ public partial class MainWindow : Window
         var any = AnyTransparentSource();
         _bgColorToggleCtrl.IsEnabled = any;
         if (!any && _backgroundColor.HasValue)
-        {
             _backgroundColor = null;
-            _bgColorToggleCtrl.IsChecked = false;
-        }
     }
 
     private async Task OnFxButtonClickAsync()
@@ -513,29 +503,61 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task OnBgColorToggleClickAsync()
+    private void ShowBackgroundColorFlyout()
     {
         if (_bgColorToggleCtrl == null)
             return;
-        if (_backgroundColor.HasValue)
+
+        var view = new ColorView
+        {
+            Color = _lastBackgroundColor,
+            IsAlphaEnabled = true,
+            IsColorPaletteVisible = true,
+            IsColorPreviewVisible = true,
+            IsAccentColorsVisible = false,
+            Width = 320,
+            Height = 380
+        };
+
+        var clearBtn = new Button
+        {
+            Content = "Clear",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 10, 10),
+            IsEnabled = _backgroundColor.HasValue
+        };
+
+        var panel = new StackPanel
+        {
+            Children = { view, clearBtn }
+        };
+
+        var flyout = new Flyout
+        {
+            Content = panel,
+            Placement = PlacementMode.Bottom,
+            ShowMode = FlyoutShowMode.Transient
+        };
+
+        view.ColorChanged += (_, e) =>
+        {
+            if (e.OldColor == e.NewColor)
+                return;
+            var c = e.NewColor;
+            _lastBackgroundColor = c;
+            _backgroundColor = new SKColor(c.R, c.G, c.B, c.A);
+            clearBtn.IsEnabled = true;
+            DebouncedBgRebuild();
+        };
+
+        clearBtn.Click += (_, _) =>
         {
             _backgroundColor = null;
-            _bgColorToggleCtrl.IsChecked = false;
+            clearBtn.IsEnabled = false;
             RebuildThumbs(true);
-            return;
-        }
+        };
 
-        var picked = await BackgroundColorDialog.ShowAsync(this, _lastBackgroundColor);
-        if (picked == null)
-        {
-            _bgColorToggleCtrl.IsChecked = false;
-            return;
-        }
-
-        _lastBackgroundColor = picked.Value;
-        _backgroundColor = new SKColor(picked.Value.R, picked.Value.G, picked.Value.B, picked.Value.A);
-        _bgColorToggleCtrl.IsChecked = true;
-        RebuildThumbs(true);
+        flyout.ShowAt(_bgColorToggleCtrl);
     }
 
     private SKBitmap? EffectiveSourceForControls()
@@ -1420,6 +1442,24 @@ public partial class MainWindow : Window
         _sliderDragging = true;
         RebuildThumbs();
         DebouncedZoomRebuild();
+    }
+
+    private void DebouncedBgRebuild()
+    {
+        _bgDebounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _bgDebounceCts = cts;
+        _ = Task.Delay(40, cts.Token).ContinueWith(t =>
+        {
+            if (t.IsCanceled)
+                return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (cts.IsCancellationRequested)
+                    return;
+                RebuildThumbs(true);
+            });
+        }, TaskScheduler.Default);
     }
 
     private void DebouncedZoomRebuild()

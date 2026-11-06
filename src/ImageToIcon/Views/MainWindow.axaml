@@ -45,7 +45,7 @@
         <Style Selector="ToggleButton.pill.unavailable">
             <Setter Property="Opacity" Value="0.4" />
         </Style>
-        <Style Selector="ToggleButton.iconbtn">
+        <Style Selector=":is(Button).iconbtn">
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="Height" Value="22" />
@@ -223,8 +223,8 @@
                                        StrokeDashArray="2,2"
                                        Opacity="0.65" />
                         </ToggleButton>
-                        <ToggleButton x:Name="BgColorToggle" Classes="iconbtn accenttoggle"
-                                      ToolTip.Tip="Fill transparent background with a solid color">
+                        <Button x:Name="BgColorToggle" Classes="iconbtn"
+                                ToolTip.Tip="Fill transparent background with a solid color">
                             <Grid Width="12" Height="12">
                                 <Ellipse Width="12" Height="12"
                                          Stroke="{Binding #BgColorToggle.Foreground}"
@@ -234,7 +234,7 @@
                                       Fill="{Binding #BgColorToggle.Foreground}"
                                       Opacity="0.65" />
                             </Grid>
-                        </ToggleButton>
+                        </Button>
                         <ToggleButton x:Name="DebugToggle" Classes="iconbtn accenttoggle">
                             <ToolTip.Tip>
                                 <TextBlock
