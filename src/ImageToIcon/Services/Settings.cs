@@ -8,6 +8,14 @@ public class Settings
     public int[] SelectedSizes { get; set; } = IconFactory.DefaultSizes.ToArray();
     public int[] CustomSizes { get; set; } = [];
     public bool ShowThumbBorders { get; set; } = true;
+    public double CornerRadius { get; set; } = 0.40;
+    public double Padding { get; set; } = 0.05;
+    public uint ShadowColor { get; set; } = 0xC8000000;
+    public double ShadowOffsetX { get; set; }
+    public double ShadowOffsetY { get; set; } = 0.02;
+    public double ShadowBlur { get; set; } = 0.01;
+    public uint StrokeColor { get; set; } = 0x80000000;
+    public double StrokeWidth { get; set; } = 0.01;
     public DateTime LastUpdateCheckUtc { get; set; }
     public string PendingUpdateVersion { get; set; } = "";
 

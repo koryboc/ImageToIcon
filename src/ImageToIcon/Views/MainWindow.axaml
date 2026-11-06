@@ -298,12 +298,13 @@
                             </Canvas>
                             <Button.Flyout>
                                 <Flyout Placement="Bottom">
-                                    <Grid Width="240"
-                                          ColumnDefinitions="60,*,28"
+                                    <Grid Width="260"
+                                          ColumnDefinitions="80,*,28,22"
                                           RowDefinitions="Auto,Auto"
                                           RowSpacing="2" ColumnSpacing="6">
-                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Corner"
-                                                   VerticalAlignment="Center" FontSize="11" />
+                                        <CheckBox x:Name="CornerEnable" Grid.Row="0" Grid.Column="0"
+                                                  Content="Corner" FontSize="11"
+                                                  VerticalAlignment="Center" />
                                         <Slider x:Name="MaskSlider" Grid.Row="0" Grid.Column="1"
                                                 Classes="compact" Minimum="0" Maximum="100"
                                                 VerticalAlignment="Center"
@@ -311,8 +312,15 @@
                                         <TextBlock x:Name="MaskValue" Grid.Row="0" Grid.Column="2" Text="0"
                                                    MinWidth="28" VerticalAlignment="Center" FontSize="11"
                                                    Foreground="{DynamicResource AppSubTextBrush}" />
-                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Padding"
-                                                   VerticalAlignment="Center" FontSize="11" />
+                                        <Button x:Name="CornerReset" Grid.Row="0" Grid.Column="3"
+                                                Content="&#x21BA;" FontSize="14"
+                                                Width="22" Height="18" MinHeight="0" Padding="0"
+                                                HorizontalContentAlignment="Center"
+                                                VerticalContentAlignment="Center"
+                                                ToolTip.Tip="Reset to default" />
+                                        <CheckBox x:Name="PaddingEnable" Grid.Row="1" Grid.Column="0"
+                                                  Content="Padding" FontSize="11"
+                                                  VerticalAlignment="Center" />
                                         <Slider x:Name="PaddingSlider" Grid.Row="1" Grid.Column="1"
                                                 Classes="compact" Minimum="0" Maximum="10"
                                                 VerticalAlignment="Center"
@@ -320,6 +328,12 @@
                                         <TextBlock x:Name="PaddingValue" Grid.Row="1" Grid.Column="2" Text="0"
                                                    MinWidth="28" VerticalAlignment="Center" FontSize="11"
                                                    Foreground="{DynamicResource AppSubTextBrush}" />
+                                        <Button x:Name="PaddingReset" Grid.Row="1" Grid.Column="3"
+                                                Content="&#x21BA;" FontSize="14"
+                                                Width="22" Height="18" MinHeight="0" Padding="0"
+                                                HorizontalContentAlignment="Center"
+                                                VerticalContentAlignment="Center"
+                                                ToolTip.Tip="Reset to default" />
                                     </Grid>
                                 </Flyout>
                             </Button.Flyout>

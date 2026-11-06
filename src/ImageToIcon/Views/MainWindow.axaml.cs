@@ -46,6 +46,7 @@ public partial class MainWindow : Window
     private readonly Button _updateBtn;
     private SKColor? _backgroundColor;
     private CancellationTokenSource? _bgDebounceCts;
+    private bool _cornerEnabled;
     private double _cropOffsetX;
     private double _cropOffsetY;
     private double _cropZoom = 1;
@@ -58,6 +59,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _maskDebounceCts;
     private double _maskRadius;
     private double _padding;
+    private bool _paddingEnabled;
     private bool _panActive;
     private double _panStartCropX;
     private double _panStartCropY;
@@ -101,6 +103,14 @@ public partial class MainWindow : Window
 
         _settings = Settings.Load();
         _selfUpdate = new SelfUpdateCoordinator(_settings, _cts.Token);
+        _fxState.ShadowColor = Color.FromUInt32(_settings.ShadowColor);
+        _fxState.ShadowOffsetX = _settings.ShadowOffsetX;
+        _fxState.ShadowOffsetY = _settings.ShadowOffsetY;
+        _fxState.ShadowBlur = _settings.ShadowBlur;
+        _fxState.StrokeColor = Color.FromUInt32(_settings.StrokeColor);
+        _fxState.StrokeWidth = _settings.StrokeWidth;
+        _maskRadius = _settings.CornerRadius;
+        _padding = _settings.Padding;
 
         var openBtn = this.FindControl<Button>("OpenBtn")!;
         var saveBtn = this.FindControl<Button>("SaveBtn")!;
@@ -174,12 +184,28 @@ public partial class MainWindow : Window
             RebuildThumbs(true);
         };
 
+        var cornerEnable = this.FindControl<CheckBox>("CornerEnable")!;
+        var paddingEnable = this.FindControl<CheckBox>("PaddingEnable")!;
+        cornerEnable.IsChecked = _cornerEnabled;
+        paddingEnable.IsChecked = _paddingEnabled;
         var maskSlider = this.FindControl<Slider>("MaskSlider")!;
         var maskValue = this.FindControl<TextBlock>("MaskValue")!;
         _maskSliderCtrl = maskSlider;
         _maskValueCtrl = maskValue;
         maskSlider.Value = _maskRadius * 100;
         maskValue.Text = ((int)Math.Round(_maskRadius * 100)).ToString();
+        cornerEnable.IsCheckedChanged += (_, _) =>
+        {
+            _cornerEnabled = cornerEnable.IsChecked == true;
+            UpdateBgColorAvailability();
+            DebouncedRebuild();
+        };
+        paddingEnable.IsCheckedChanged += (_, _) =>
+        {
+            _paddingEnabled = paddingEnable.IsChecked == true;
+            UpdateBgColorAvailability();
+            DebouncedRebuild();
+        };
         maskSlider.PropertyChanged += (_, e) =>
         {
             if (e.Property != RangeBase.ValueProperty)
@@ -199,6 +225,8 @@ public partial class MainWindow : Window
                 _maskRadius = v;
             }
 
+            if (cornerEnable.IsChecked != true)
+                cornerEnable.IsChecked = true;
             UpdateBgColorAvailability();
             DebouncedRebuild();
         };
@@ -228,8 +256,29 @@ public partial class MainWindow : Window
                 _padding = v;
             }
 
+            if (paddingEnable.IsChecked != true)
+                paddingEnable.IsChecked = true;
             UpdateBgColorAvailability();
             DebouncedRebuild();
+        };
+
+        var cornerReset = this.FindControl<Button>("CornerReset")!;
+        var paddingReset = this.FindControl<Button>("PaddingReset")!;
+        var cornerDefault = new Settings().CornerRadius * 100;
+        var paddingDefault = new Settings().Padding * 100;
+        cornerReset.IsEnabled = (int)Math.Round(maskSlider.Value) != (int)Math.Round(cornerDefault);
+        paddingReset.IsEnabled = (int)Math.Round(paddingSlider.Value) != (int)Math.Round(paddingDefault);
+        cornerReset.Click += (_, _) => maskSlider.Value = cornerDefault;
+        paddingReset.Click += (_, _) => paddingSlider.Value = paddingDefault;
+        maskSlider.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == RangeBase.ValueProperty)
+                cornerReset.IsEnabled = (int)Math.Round(maskSlider.Value) != (int)Math.Round(cornerDefault);
+        };
+        paddingSlider.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == RangeBase.ValueProperty)
+                paddingReset.IsEnabled = (int)Math.Round(paddingSlider.Value) != (int)Math.Round(paddingDefault);
         };
 
         AttachSliderDragTracking(maskSlider);
@@ -318,6 +367,15 @@ public partial class MainWindow : Window
             _settings.SelectedSizes = _sizeToggles.Where(t => t.Size >= 256 ? t.IsUserChecked : t.IsChecked).Select(t => t.Size).ToArray();
             _settings.CustomSizes = _sizeToggles.Where(t => t.IsCustom).Select(t => t.Size).ToArray();
             _settings.ShowThumbBorders = borderToggle.IsChecked == true;
+            var fx = _savedFxState ?? _fxState;
+            _settings.ShadowColor = fx.ShadowColor.ToUInt32();
+            _settings.ShadowOffsetX = fx.ShadowOffsetX;
+            _settings.ShadowOffsetY = fx.ShadowOffsetY;
+            _settings.ShadowBlur = fx.ShadowBlur;
+            _settings.StrokeColor = fx.StrokeColor.ToUInt32();
+            _settings.StrokeWidth = fx.StrokeWidth;
+            _settings.CornerRadius = _debugPreview ? _savedMaskRadius : _maskRadius;
+            _settings.Padding = _debugPreview ? _savedPadding : _padding;
             _settings.Save();
             _cts.Cancel();
             _rebuildCts?.Cancel();
@@ -329,6 +387,9 @@ public partial class MainWindow : Window
         else
             LoadDefaultSymbol();
     }
+
+    private double EffectiveMask => _cornerEnabled ? _maskRadius : 0;
+    private double EffectivePadding => _paddingEnabled ? _padding : 0;
 
     private void InitializeComponent()
     {
@@ -431,13 +492,13 @@ public partial class MainWindow : Window
                 }
 
                 clicked.IsUserChecked = true;
-                clicked.IsAutoPromoted = false;
             }
             else
             {
                 clicked.IsUserChecked = false;
-                clicked.IsAutoPromoted = false;
             }
+
+            clicked.IsAutoPromoted = false;
         }
         finally
         {
@@ -507,7 +568,7 @@ public partial class MainWindow : Window
     private bool AnyTransparentSource()
     {
         if (_sourceHasTransparency) return true;
-        if (_maskRadius > 0 || _padding > 0) return true;
+        if (EffectiveMask > 0 || EffectivePadding > 0) return true;
         foreach (var t in _topThumbs.Concat(_smallThumbs))
         {
             if (t.OverrideHasTransparency) return true;
@@ -844,7 +905,7 @@ public partial class MainWindow : Window
             {
                 if (all[i].Preview != null)
                     continue;
-                var (dbgSrc, dbgPreview) = RenderDebugFrame(all[i].Size, i, all.Count, _maskRadius, _padding);
+                var (dbgSrc, dbgPreview) = RenderDebugFrame(all[i].Size, i, all.Count, EffectiveMask, EffectivePadding);
                 all[i].Fill(dbgSrc, dbgPreview, true);
             }
         }
@@ -1131,12 +1192,12 @@ public partial class MainWindow : Window
 
     private double MaskFor(IconThumb t)
     {
-        return t.MaskRadiusOverride ?? _maskRadius;
+        return t.MaskRadiusOverride ?? EffectiveMask;
     }
 
     private double PaddingFor(IconThumb t)
     {
-        return t.PaddingOverride ?? _padding;
+        return t.PaddingOverride ?? EffectivePadding;
     }
 
     private FitMode FitModeFor(IconThumb t)
@@ -1176,8 +1237,8 @@ public partial class MainWindow : Window
 
     private void SnapshotGlobalsInto(IconThumb t)
     {
-        t.MaskRadiusOverride ??= _maskRadius;
-        t.PaddingOverride ??= _padding;
+        t.MaskRadiusOverride ??= EffectiveMask;
+        t.PaddingOverride ??= EffectivePadding;
         t.FitModeOverride ??= _fitMode;
         t.CropOffsetXOverride ??= _cropOffsetX;
         t.CropOffsetYOverride ??= _cropOffsetY;

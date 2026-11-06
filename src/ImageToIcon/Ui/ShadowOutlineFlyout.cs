@@ -11,13 +11,13 @@ namespace ImageToIcon.Ui;
 public sealed class ShadowOutlineState
 {
     public bool ShadowEnabled { get; set; }
-    public Color ShadowColor { get; set; } = Color.FromArgb(160, 0, 0, 0);
+    public Color ShadowColor { get; set; } = Color.FromArgb(200, 0, 0, 0);
     public double ShadowOffsetX { get; set; }
-    public double ShadowOffsetY { get; set; } = 0.01;
-    public double ShadowBlur { get; set; } = 0.02;
+    public double ShadowOffsetY { get; set; } = 0.02;
+    public double ShadowBlur { get; set; } = 0.01;
 
     public bool StrokeEnabled { get; set; }
-    public Color StrokeColor { get; set; } = Color.FromArgb(255, 0, 0, 0);
+    public Color StrokeColor { get; set; } = Color.FromArgb(128, 0, 0, 0);
     public double StrokeWidth { get; set; } = 0.01;
 
     public bool AnyEnabled => ShadowEnabled || StrokeEnabled;
@@ -53,8 +53,32 @@ public static class ShadowOutlineFlyout
         ShadowOutlineState state,
         Action onChanged)
     {
+        var defaults = new ShadowOutlineState();
+        static int Pct(double v) => (int)Math.Round(v * 100.0);
+
+        bool ShadowAtDefault()
+        {
+            return state.ShadowColor == defaults.ShadowColor
+                   && Pct(state.ShadowOffsetX) == Pct(defaults.ShadowOffsetX)
+                   && Pct(state.ShadowOffsetY) == Pct(defaults.ShadowOffsetY)
+                   && Pct(state.ShadowBlur) == Pct(defaults.ShadowBlur);
+        }
+
+        bool StrokeAtDefault()
+        {
+            return state.StrokeColor == defaults.StrokeColor
+                   && Pct(state.StrokeWidth) == Pct(defaults.StrokeWidth);
+        }
+
+        var shadowReset = BuildResetButton();
+        var strokeReset = BuildResetButton();
+        shadowReset.IsEnabled = !ShadowAtDefault();
+        strokeReset.IsEnabled = !StrokeAtDefault();
+
         void Changed()
         {
+            shadowReset.IsEnabled = !ShadowAtDefault();
+            strokeReset.IsEnabled = !StrokeAtDefault();
             onChanged();
         }
 
@@ -67,6 +91,29 @@ public static class ShadowOutlineFlyout
         var strokeEnable = new CheckBox { Content = "Stroke", IsChecked = state.StrokeEnabled, FontWeight = FontWeight.SemiBold };
         var strokeSwatch = BuildSwatch(state.StrokeColor);
         var strokeWidth = BuildPercentSlider(0, 10, state.StrokeWidth, out var strokeWidthLbl);
+
+        shadowReset.Click += (_, _) =>
+        {
+            var d = new ShadowOutlineState();
+            state.ShadowColor = d.ShadowColor;
+            state.ShadowOffsetX = d.ShadowOffsetX;
+            state.ShadowOffsetY = d.ShadowOffsetY;
+            state.ShadowBlur = d.ShadowBlur;
+            SetSwatch(shadowSwatch, state.ShadowColor);
+            shadowOffX.Value = state.ShadowOffsetX * 100.0;
+            shadowOffY.Value = state.ShadowOffsetY * 100.0;
+            shadowBlur.Value = state.ShadowBlur * 100.0;
+            Changed();
+        };
+        strokeReset.Click += (_, _) =>
+        {
+            var d = new ShadowOutlineState();
+            state.StrokeColor = d.StrokeColor;
+            state.StrokeWidth = d.StrokeWidth;
+            SetSwatch(strokeSwatch, state.StrokeColor);
+            strokeWidth.Value = state.StrokeWidth * 100.0;
+            Changed();
+        };
 
         shadowEnable.IsCheckedChanged += (_, _) =>
         {
@@ -110,6 +157,9 @@ public static class ShadowOutlineFlyout
         Grid.SetColumnSpan(shadowEnable, 2);
         Grid.SetRow(shadowEnable, 0);
         shadowGrid.Children.Add(shadowEnable);
+        Grid.SetColumn(shadowReset, 2);
+        Grid.SetRow(shadowReset, 0);
+        shadowGrid.Children.Add(shadowReset);
         AddRow(shadowGrid, 1, "Color", shadowSwatch, null);
         AddRow(shadowGrid, 2, "Offset X", shadowOffX, shadowOffXLbl);
         AddRow(shadowGrid, 3, "Offset Y", shadowOffY, shadowOffYLbl);
@@ -126,6 +176,9 @@ public static class ShadowOutlineFlyout
         Grid.SetColumnSpan(strokeEnable, 2);
         Grid.SetRow(strokeEnable, 0);
         strokeGrid.Children.Add(strokeEnable);
+        Grid.SetColumn(strokeReset, 2);
+        Grid.SetRow(strokeReset, 0);
+        strokeGrid.Children.Add(strokeReset);
         AddRow(strokeGrid, 1, "Color", strokeSwatch, null);
         AddRow(strokeGrid, 2, "Width", strokeWidth, strokeWidthLbl);
 
@@ -211,6 +264,24 @@ public static class ShadowOutlineFlyout
             FontSize = 11
         };
         return s;
+    }
+
+    private static Button BuildResetButton()
+    {
+        var btn = new Button
+        {
+            Content = "\u21BA",
+            FontSize = 14,
+            Width = 22,
+            Height = 18,
+            MinHeight = 0,
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        ToolTip.SetTip(btn, "Reset to defaults");
+        return btn;
     }
 
     private static Button BuildSwatch(Color color)
