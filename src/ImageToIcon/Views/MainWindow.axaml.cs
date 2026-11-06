@@ -60,6 +60,7 @@ public partial class MainWindow : Window
     private double _panStartCropX;
     private double _panStartCropY;
     private IconThumb? _pressedThumb;
+    private bool _pressedThumbWasRight;
     private bool _pressMovedBeyondThreshold;
     private Point _pressPoint;
     private Task _rebuildChain = Task.CompletedTask;
@@ -1301,18 +1302,12 @@ public partial class MainWindow : Window
         if (sender is not Control { Tag: IconThumb thumb } c)
             return;
         var props = e.GetCurrentPoint(c).Properties;
-
-        if (props.IsRightButtonPressed)
-        {
-            SetFocus(_focusedThumb == thumb ? null : thumb);
-            e.Handled = true;
-            return;
-        }
-
-        if (!props.IsLeftButtonPressed)
+        var right = props.IsRightButtonPressed;
+        if (!props.IsLeftButtonPressed && !right)
             return;
 
         _pressedThumb = thumb;
+        _pressedThumbWasRight = right;
         _pressPoint = e.GetPosition(this);
         _panStartCropX = CropXFor(thumb);
         _panStartCropY = CropYFor(thumb);
@@ -1453,6 +1448,7 @@ public partial class MainWindow : Window
                 return;
             var thumb = _pressedThumb;
             var wasPan = _panActive;
+            var wasRight = _pressedThumbWasRight;
             _pressedThumb = null;
             _panActive = false;
             e.Pointer.Capture(null);
@@ -1460,6 +1456,12 @@ public partial class MainWindow : Window
             if (wasPan)
             {
                 OnSliderReleased();
+                return;
+            }
+
+            if (wasRight)
+            {
+                SetFocus(_focusedThumb == thumb ? null : thumb);
                 return;
             }
 
