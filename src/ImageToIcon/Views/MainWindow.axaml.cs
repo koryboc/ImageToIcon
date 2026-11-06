@@ -478,10 +478,11 @@ public partial class MainWindow : Window
 
     private void HandleTopToggleUserClick(SizeToggle clicked)
     {
+        var becameChecked = clicked.IsChecked;
         _suppressTopFrameSync = true;
         try
         {
-            if (clicked.IsChecked)
+            if (becameChecked)
             {
                 foreach (var other in _sizeToggles)
                 {
@@ -505,7 +506,8 @@ public partial class MainWindow : Window
             _suppressTopFrameSync = false;
         }
 
-        Dispatcher.UIThread.Post(PromoteLargestAvailableTopFrame);
+        if (becameChecked)
+            Dispatcher.UIThread.Post(PromoteLargestAvailableTopFrame);
     }
 
     private void PromoteLargestAvailableTopFrame()
