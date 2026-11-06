@@ -115,7 +115,7 @@ public partial class MainWindow : Window
         _bgColorToggleCtrl = bgColorToggle;
         bgColorToggle.Click += (_, _) => ShowBackgroundColorFlyout();
         var fxButton = this.FindControl<Button>("FxButton")!;
-        fxButton.Click += async (_, _) => await OnFxButtonClickAsync();
+        fxButton.Click += (_, _) => ShadowOutlineFlyout.Show(fxButton, _fxState, DebouncedBgRebuild);
         var debugToggle = this.FindControl<ToggleButton>("DebugToggle")!;
         debugToggle.Click += (_, _) =>
         {
@@ -476,31 +476,6 @@ public partial class MainWindow : Window
         _bgColorToggleCtrl.IsEnabled = any;
         if (!any && _backgroundColor.HasValue)
             _backgroundColor = null;
-    }
-
-    private async Task OnFxButtonClickAsync()
-    {
-        var result = await ShadowOutlineDialog.ShowAsync(this, _fxState, RenderFxPreview);
-        if (result == null)
-            return;
-        _fxState = result;
-        RebuildThumbs(true);
-    }
-
-    private SKBitmap? RenderFxPreview(ShadowOutlineState state)
-    {
-        var src = _sourceImage;
-        if (src == null)
-            return null;
-        var previewSize = Math.Min(256, Math.Max(src.Width, src.Height));
-        try
-        {
-            return IconFactory.ResizePadded(src, previewSize, _maskRadius, _padding, _fitMode, _cropOffsetX, _cropOffsetY, _cropZoom, _backgroundColor, state.Shadow, state.Stroke);
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private void ShowBackgroundColorFlyout()

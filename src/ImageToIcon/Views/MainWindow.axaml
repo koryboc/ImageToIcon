@@ -115,6 +115,17 @@
         <Style Selector="TextBlock.focusMode">
             <Setter Property="Foreground" Value="Orange" />
         </Style>
+        <Style Selector="Slider.compact">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,-6,0,-6" />
+        </Style>
+        <Style Selector="Slider.compact /template/ Thumb">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+        </Style>
         <Style Selector="Slider.focusMode">
             <Setter Property="Foreground" Value="Orange" />
         </Style>

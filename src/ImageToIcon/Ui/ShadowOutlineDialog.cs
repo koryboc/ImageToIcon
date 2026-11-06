@@ -3,9 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Styling;
-using ImageToIcon.Models;
-using ImageToIcon.Platform;
 using ImageToIcon.Services;
 using SkiaSharp;
 
@@ -49,33 +46,17 @@ public sealed class ShadowOutlineState
     }
 }
 
-public static class ShadowOutlineDialog
+public static class ShadowOutlineFlyout
 {
-    public static async Task<ShadowOutlineState?> ShowAsync(
-        Window owner,
-        ShadowOutlineState current,
-        Func<ShadowOutlineState, SKBitmap?>? renderPreview = null)
+    public static void Show(
+        Control anchor,
+        ShadowOutlineState state,
+        Action onChanged)
     {
-        var state = current.Clone();
-        ShadowOutlineState? result = null;
-
-        var preview = new Image
+        void Changed()
         {
-            Width = 192,
-            Height = 192,
-            Stretch = Stretch.Uniform,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        var isDark = owner.ActualThemeVariant == ThemeVariant.Dark;
-        var previewBg = new Border
-        {
-            Width = 208,
-            Height = 208,
-            CornerRadius = new CornerRadius(4),
-            Background = new SolidColorBrush(isDark ? Color.FromRgb(45, 45, 48) : Color.FromRgb(230, 230, 232)),
-            Child = preview,
-            Margin = new Thickness(0, 0, 0, 12)
-        };
+            onChanged();
+        }
 
         var shadowEnable = new CheckBox { Content = "Shadow", IsChecked = state.ShadowEnabled, FontWeight = FontWeight.SemiBold };
         var shadowSwatch = BuildSwatch(state.ShadowColor);
@@ -90,43 +71,40 @@ public static class ShadowOutlineDialog
         shadowEnable.IsCheckedChanged += (_, _) =>
         {
             state.ShadowEnabled = shadowEnable.IsChecked == true;
-            UpdatePreview();
+            Changed();
         };
         strokeEnable.IsCheckedChanged += (_, _) =>
         {
             state.StrokeEnabled = strokeEnable.IsChecked == true;
-            UpdatePreview();
+            Changed();
         };
-        shadowOffX.ValueChanged += (_, e) =>
+
+        AttachSlider(shadowOffX, shadowOffXLbl, shadowEnable, v =>
         {
-            state.ShadowOffsetX = e.NewValue / 100.0;
-            shadowOffXLbl.Text = Fmt(e.NewValue);
-            UpdatePreview();
-        };
-        shadowOffY.ValueChanged += (_, e) =>
+            state.ShadowOffsetX = v;
+            Changed();
+        });
+        AttachSlider(shadowOffY, shadowOffYLbl, shadowEnable, v =>
         {
-            state.ShadowOffsetY = e.NewValue / 100.0;
-            shadowOffYLbl.Text = Fmt(e.NewValue);
-            UpdatePreview();
-        };
-        shadowBlur.ValueChanged += (_, e) =>
+            state.ShadowOffsetY = v;
+            Changed();
+        });
+        AttachSlider(shadowBlur, shadowBlurLbl, shadowEnable, v =>
         {
-            state.ShadowBlur = e.NewValue / 100.0;
-            shadowBlurLbl.Text = Fmt(e.NewValue);
-            UpdatePreview();
-        };
-        strokeWidth.ValueChanged += (_, e) =>
+            state.ShadowBlur = v;
+            Changed();
+        });
+        AttachSlider(strokeWidth, strokeWidthLbl, strokeEnable, v =>
         {
-            state.StrokeWidth = e.NewValue / 100.0;
-            strokeWidthLbl.Text = Fmt(e.NewValue);
-            UpdatePreview();
-        };
+            state.StrokeWidth = v;
+            Changed();
+        });
 
         var shadowGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("80,*,32"),
+            ColumnDefinitions = new ColumnDefinitions("60,*,28"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
-            RowSpacing = 6, ColumnSpacing = 8
+            RowSpacing = 2, ColumnSpacing = 6
         };
         Grid.SetColumn(shadowEnable, 0);
         Grid.SetColumnSpan(shadowEnable, 2);
@@ -139,10 +117,10 @@ public static class ShadowOutlineDialog
 
         var strokeGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("80,*,32"),
+            ColumnDefinitions = new ColumnDefinitions("60,*,28"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
-            RowSpacing = 6, ColumnSpacing = 8,
-            Margin = new Thickness(0, 12, 0, 0)
+            RowSpacing = 2, ColumnSpacing = 6,
+            Margin = new Thickness(0, 6, 0, 0)
         };
         Grid.SetColumn(strokeEnable, 0);
         Grid.SetColumnSpan(strokeEnable, 2);
@@ -151,74 +129,58 @@ public static class ShadowOutlineDialog
         AddRow(strokeGrid, 1, "Color", strokeSwatch, null);
         AddRow(strokeGrid, 2, "Width", strokeWidth, strokeWidthLbl);
 
-        var okBtn = new Button { Content = "OK", Width = 80, IsDefault = true, HorizontalContentAlignment = HorizontalAlignment.Center };
-        var cancelBtn = new Button { Content = "Cancel", Width = 80, IsCancel = true, HorizontalContentAlignment = HorizontalAlignment.Center };
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { okBtn, cancelBtn }
-        };
-
         var root = new StackPanel
         {
-            Margin = new Thickness(16),
-            Width = 340,
-            Children = { previewBg, shadowGrid, strokeGrid, buttons }
+            Width = 240,
+            Children = { shadowGrid, strokeGrid }
         };
 
-        var dlg = new Window
+        var flyout = new Flyout
         {
-            Title = "Shadow & Stroke",
-            SizeToContent = SizeToContent.WidthAndHeight,
-            CanResize = false,
-            ShowInTaskbar = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = owner.Background,
-            Foreground = owner.Foreground,
-            Content = root
+            Content = root,
+            Placement = PlacementMode.Bottom,
+            ShowMode = FlyoutShowMode.Transient
         };
 
         shadowSwatch.Click += async (_, _) =>
         {
-            var picked = await BackgroundColorDialog.ShowAsync(dlg, "Shadow Color", state.ShadowColor, false);
+            var host = TopLevel.GetTopLevel(anchor) as Window;
+            if (host == null) return;
+            var picked = await BackgroundColorDialog.ShowAsync(host, "Shadow Color", state.ShadowColor, false);
             if (picked == null) return;
             state.ShadowColor = picked.Value;
             SetSwatch(shadowSwatch, picked.Value);
-            UpdatePreview();
+            if (shadowEnable.IsChecked != true)
+                shadowEnable.IsChecked = true;
+            else
+                Changed();
         };
         strokeSwatch.Click += async (_, _) =>
         {
-            var picked = await BackgroundColorDialog.ShowAsync(dlg, "Stroke Color", state.StrokeColor, false);
+            var host = TopLevel.GetTopLevel(anchor) as Window;
+            if (host == null) return;
+            var picked = await BackgroundColorDialog.ShowAsync(host, "Stroke Color", state.StrokeColor, false);
             if (picked == null) return;
             state.StrokeColor = picked.Value;
             SetSwatch(strokeSwatch, picked.Value);
-            UpdatePreview();
+            if (strokeEnable.IsChecked != true)
+                strokeEnable.IsChecked = true;
+            else
+                Changed();
         };
-        okBtn.Click += (_, _) =>
-        {
-            result = state;
-            dlg.Close();
-        };
-        cancelBtn.Click += (_, _) => dlg.Close();
-        dlg.Opened += (_, _) =>
-        {
-            Win32Window.ApplyDarkTitlebar(dlg);
-            UpdatePreview();
-        };
-        await dlg.ShowDialog(owner);
-        preview.Source = null;
-        return result;
 
-        void UpdatePreview()
+        flyout.ShowAt(anchor);
+    }
+
+    private static void AttachSlider(Slider slider, TextBlock label, CheckBox enable, Action<double> apply)
+    {
+        slider.ValueChanged += (_, e) =>
         {
-            var bmp = renderPreview?.Invoke(state);
-            if (bmp == null) return;
-            preview.Source = IconThumb.ToAvaloniaBitmap(bmp);
-            bmp.Dispose();
-        }
+            label.Text = Fmt(e.NewValue);
+            apply(e.NewValue / 100.0);
+            if (enable.IsChecked != true)
+                enable.IsChecked = true;
+        };
     }
 
     private static Slider BuildPercentSlider(double min, double max, double normalized, out TextBlock label)
@@ -228,6 +190,7 @@ public static class ShadowOutlineDialog
             Minimum = min,
             Maximum = max,
             Value = normalized * 100.0,
+            Classes = { "compact" },
             VerticalAlignment = VerticalAlignment.Center
         };
         label = new TextBlock
@@ -244,11 +207,12 @@ public static class ShadowOutlineDialog
     {
         return new Button
         {
-            Width = 48,
-            Height = 20,
+            Width = 36,
+            Height = 16,
+            MinHeight = 0,
             Padding = new Thickness(0),
             HorizontalAlignment = HorizontalAlignment.Left,
-            Content = new Rectangle { Fill = new SolidColorBrush(color), Width = 44, Height = 16 }
+            Content = new Rectangle { Fill = new SolidColorBrush(color), Width = 32, Height = 12 }
         };
     }
 
