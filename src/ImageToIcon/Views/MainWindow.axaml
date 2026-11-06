@@ -45,6 +45,24 @@
         <Style Selector="ToggleButton.pill.unavailable">
             <Setter Property="Opacity" Value="0.4" />
         </Style>
+        <Style Selector="ToggleButton.pill.autopromoted:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppUpdateBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppUpdateBrush}" />
+            <Setter Property="Foreground" Value="Black" />
+        </Style>
+        <Style Selector="ToggleButton.pill.autopromoted:checked:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppUpdateBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppUpdateBrush}" />
+            <Setter Property="Foreground" Value="Black" />
+        </Style>
+        <Style Selector="ToggleButton.pill.userpreferred:not(:checked) /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppThumbBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1.5" />
+        </Style>
+        <Style Selector="ToggleButton.pill.userpreferred:not(:checked):pointerover /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppThumbBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1.5" />
+        </Style>
         <Style Selector=":is(Button).iconbtn">
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="MinHeight" Value="0" />
@@ -377,6 +395,8 @@
                     <DataTemplate DataType="m:SizeToggle">
                         <ToggleButton Classes="pill" Margin="2"
                                       Classes.unavailable="{Binding !IsAvailable}"
+                                      Classes.autopromoted="{Binding IsAutoPromoted}"
+                                      Classes.userpreferred="{Binding IsUserChecked}"
                                       Content="{Binding Label}"
                                       IsChecked="{Binding IsChecked, Mode=TwoWay}" />
                     </DataTemplate>

@@ -315,7 +315,7 @@ public partial class MainWindow : Window
 
         Closing += (_, _) =>
         {
-            _settings.SelectedSizes = _sizeToggles.Where(t => t.IsChecked).Select(t => t.Size).ToArray();
+            _settings.SelectedSizes = _sizeToggles.Where(t => t.Size >= 256 ? t.IsUserChecked : t.IsChecked).Select(t => t.Size).ToArray();
             _settings.CustomSizes = _sizeToggles.Where(t => t.IsCustom).Select(t => t.Size).ToArray();
             _settings.ShowThumbBorders = borderToggle.IsChecked == true;
             _settings.Save();
@@ -399,6 +399,7 @@ public partial class MainWindow : Window
         var maxDim = Math.Max(_sourceImage.Width, _sourceImage.Height);
         foreach (var t in _sizeToggles)
             t.IsAvailable = t.Size <= maxDim;
+        PromoteLargestAvailableTopFrame();
         UpdateFitModeAvailability();
         UpdateBgColorAvailability();
     }
@@ -408,13 +409,64 @@ public partial class MainWindow : Window
         if (e.PropertyName != nameof(SizeToggle.IsChecked))
             return;
 
-        // Windows only ever picks the largest available frame from anything
-        // >= 256, so treat that band as radio-style: checking one clears
-        // the others, but nothing gets permanently disabled.
-        if (sender is SizeToggle { Size: >= 256, IsChecked: true } changed)
-            EnforceTopFrameExclusivity(changed);
+        if (sender is SizeToggle { Size: >= 256 } top && !_suppressTopFrameSync)
+            HandleTopToggleUserClick(top);
 
         RebuildThumbs();
+    }
+
+    private void HandleTopToggleUserClick(SizeToggle clicked)
+    {
+        _suppressTopFrameSync = true;
+        try
+        {
+            if (clicked.IsChecked)
+            {
+                foreach (var other in _sizeToggles)
+                {
+                    if (other == clicked || other.Size < 256) continue;
+                    other.IsChecked = false;
+                    other.IsUserChecked = false;
+                    other.IsAutoPromoted = false;
+                }
+
+                clicked.IsUserChecked = true;
+                clicked.IsAutoPromoted = false;
+            }
+            else
+            {
+                clicked.IsUserChecked = false;
+                clicked.IsAutoPromoted = false;
+            }
+        }
+        finally
+        {
+            _suppressTopFrameSync = false;
+        }
+
+        Dispatcher.UIThread.Post(PromoteLargestAvailableTopFrame);
+    }
+
+    private void PromoteLargestAvailableTopFrame()
+    {
+        var preferred = _sizeToggles.FirstOrDefault(t => t is { Size: >= 256, IsUserChecked: true, IsAvailable: true });
+        var active = preferred ?? _sizeToggles.Where(t => t is { Size: >= 256, IsAvailable: true }).MaxBy(t => t.Size);
+        var autoPromoted = active != null && preferred == null;
+        _suppressTopFrameSync = true;
+        try
+        {
+            foreach (var t in _sizeToggles)
+            {
+                if (t.Size < 256) continue;
+                var shouldCheck = t == active;
+                t.IsChecked = shouldCheck;
+                t.IsAutoPromoted = shouldCheck && autoPromoted;
+            }
+        }
+        finally
+        {
+            _suppressTopFrameSync = false;
+        }
     }
 
     private void EnforceTopFrameExclusivity(SizeToggle keep)
@@ -426,9 +478,13 @@ public partial class MainWindow : Window
         {
             foreach (var t in _sizeToggles)
             {
-                if (t != keep && t.Size >= 256)
-                    t.IsChecked = false;
+                if (t == keep || t.Size < 256) continue;
+                t.IsChecked = false;
+                t.IsUserChecked = false;
+                t.IsAutoPromoted = false;
             }
+
+            keep.IsUserChecked = true;
         }
         finally
         {

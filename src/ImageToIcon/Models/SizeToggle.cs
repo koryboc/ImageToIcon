@@ -31,6 +31,28 @@ public class SizeToggle(int size, bool isChecked, bool isCustom = false) : INoti
         }
     } = true;
 
+    public bool IsUserChecked
+    {
+        get;
+        set
+        {
+            if (field == value) return;
+            field = value;
+            Raise();
+        }
+    } = isChecked;
+
+    public bool IsAutoPromoted
+    {
+        get;
+        set
+        {
+            if (field == value) return;
+            field = value;
+            Raise();
+        }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void Raise([CallerMemberName] string? name = null)
