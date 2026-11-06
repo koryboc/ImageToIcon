@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using ImageToIcon.Models;
 using ImageToIcon.Platform;
@@ -210,18 +209,15 @@ public static class ShadowOutlineDialog
             UpdatePreview();
         };
         await dlg.ShowDialog(owner);
-        if (preview.Source is Bitmap finalBmp)
-            finalBmp.Dispose();
+        preview.Source = null;
         return result;
 
         void UpdatePreview()
         {
             var bmp = renderPreview?.Invoke(state);
             if (bmp == null) return;
-            var old = preview.Source as Bitmap;
             preview.Source = IconThumb.ToAvaloniaBitmap(bmp);
             bmp.Dispose();
-            old?.Dispose();
         }
     }
 

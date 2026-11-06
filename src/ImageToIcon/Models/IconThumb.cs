@@ -2,7 +2,6 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using Avalonia.Threading;
 using ImageToIcon.Services;
 using SkiaSharp;
 
@@ -63,7 +62,6 @@ public class IconThumb(int size) : INotifyPropertyChanged
     public void Fill(SKBitmap newSource, Bitmap newPreview, bool keepSource)
     {
         var oldSource = Source;
-        var oldPreview = Preview;
         Preview = newPreview;
         if (keepSource)
         {
@@ -71,14 +69,13 @@ public class IconThumb(int size) : INotifyPropertyChanged
         }
         else
         {
-            DeferDispose(newSource);
+            newSource.Dispose();
             Source = null;
         }
 
         Raise(nameof(Source));
         Raise(nameof(Preview));
-        DeferDispose(oldSource);
-        DeferDispose(oldPreview);
+        oldSource?.Dispose();
     }
 
     public void Replace(SKBitmap newSource)
@@ -89,8 +86,7 @@ public class IconThumb(int size) : INotifyPropertyChanged
 
     public void DisposeContent()
     {
-        DeferDispose(Source);
-        DeferDispose(Preview);
+        Source?.Dispose();
         Source = null;
         Preview = null;
     }
@@ -102,7 +98,7 @@ public class IconThumb(int size) : INotifyPropertyChanged
         OverrideHasTransparency = IconFactory.HasTransparency(newSource);
         Raise(nameof(OverrideSource));
         Raise(nameof(IsDecoupled));
-        DeferDispose(old);
+        old?.Dispose();
     }
 
     public void NotifyOverridesChanged()
@@ -122,15 +118,7 @@ public class IconThumb(int size) : INotifyPropertyChanged
         CropOffsetYOverride = null;
         Raise(nameof(OverrideSource));
         Raise(nameof(IsDecoupled));
-        DeferDispose(old);
-    }
-
-    // Defer so the render thread can release its native ref before dispose.
-    private static void DeferDispose(IDisposable? disposable)
-    {
-        if (disposable == null)
-            return;
-        Dispatcher.UIThread.Post(disposable.Dispose, DispatcherPriority.Background);
+        old?.Dispose();
     }
 
     public static Bitmap ToAvaloniaBitmap(SKBitmap img)
