@@ -178,7 +178,7 @@ public partial class MainWindow : Window
                     _maskSliderCtrl?.Value = _maskRadius * 100;
                     _maskValueCtrl?.Text = ((int)Math.Round(_maskRadius * 100)).ToString();
                     _paddingSliderCtrl?.Value = _padding * 100;
-                    _paddingValueCtrl?.Text = ((int)Math.Round(_padding * 100)).ToString();
+                    _paddingValueCtrl?.Text = FormatPadding(_padding * 100);
                     UpdateFitModeLabel();
                     if (_savedFocusedThumb != null
                         && (_topThumbs.Contains(_savedFocusedThumb) || _smallThumbs.Contains(_savedFocusedThumb)))
@@ -246,13 +246,13 @@ public partial class MainWindow : Window
         _paddingSliderCtrl = paddingSlider;
         _paddingValueCtrl = paddingValue;
         paddingSlider.Value = _padding * 100;
-        paddingValue.Text = ((int)Math.Round(_padding * 100)).ToString();
+        paddingValue.Text = FormatPadding(_padding * 100);
         paddingSlider.PropertyChanged += (_, e) =>
         {
             if (e.Property != RangeBase.ValueProperty)
                 return;
             var v = paddingSlider.Value / 100.0;
-            paddingValue.Text = ((int)Math.Round(paddingSlider.Value)).ToString();
+            paddingValue.Text = FormatPadding(paddingSlider.Value);
             var current = _focusedThumb != null ? _focusedThumb.PaddingOverride ?? _padding : _padding;
             if (Math.Abs(v - current) < 0.0001)
                 return;
@@ -277,7 +277,7 @@ public partial class MainWindow : Window
         var cornerDefault = new Settings().CornerRadius * 100;
         var paddingDefault = new Settings().Padding * 100;
         cornerReset.IsEnabled = (int)Math.Round(maskSlider.Value) != (int)Math.Round(cornerDefault);
-        paddingReset.IsEnabled = (int)Math.Round(paddingSlider.Value) != (int)Math.Round(paddingDefault);
+        paddingReset.IsEnabled = Math.Abs(paddingSlider.Value - paddingDefault) >= 0.05;
         cornerReset.Click += (_, _) => maskSlider.Value = cornerDefault;
         paddingReset.Click += (_, _) => paddingSlider.Value = paddingDefault;
         maskSlider.PropertyChanged += (_, e) =>
@@ -288,7 +288,7 @@ public partial class MainWindow : Window
         paddingSlider.PropertyChanged += (_, e) =>
         {
             if (e.Property == RangeBase.ValueProperty)
-                paddingReset.IsEnabled = (int)Math.Round(paddingSlider.Value) != (int)Math.Round(paddingDefault);
+                paddingReset.IsEnabled = Math.Abs(paddingSlider.Value - paddingDefault) >= 0.05;
         };
 
         AttachSliderDragTracking(maskSlider);
@@ -794,6 +794,12 @@ public partial class MainWindow : Window
         ApplyFocusClass(_fitModeButtonCtrl, on);
         ApplyFocusClass(_adjustButtonCtrl, on);
         UpdateFitModeAvailability();
+    }
+
+    // Padding slider is 0..10 with sub-integer precision; one decimal matches the step granularity.
+    private static string FormatPadding(double sliderValue)
+    {
+        return Math.Round(sliderValue, 1).ToString("0.0", CultureInfo.InvariantCulture);
     }
 
     private static void ApplyFocusClass(StyledElement? c, bool on)

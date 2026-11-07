@@ -98,7 +98,7 @@ public class Settings
                 w.WriteBoolean(nameof(ShowThumbBorders), ShowThumbBorders);
 
             WriteDouble(w, nameof(CornerRadius), CornerRadius, def.CornerRadius);
-            WriteDouble(w, nameof(Padding), Padding, def.Padding);
+            WriteDouble(w, nameof(Padding), Padding, def.Padding, 3);
             if (ShadowColor != def.ShadowColor)
                 w.WriteNumber(nameof(ShadowColor), ShadowColor);
             WriteDouble(w, nameof(ShadowOffsetX), ShadowOffsetX, def.ShadowOffsetX);
@@ -121,10 +121,10 @@ public class Settings
         }
     }
 
-    private static void WriteDouble(Utf8JsonWriter w, string name, double value, double defaultValue)
+    private static void WriteDouble(Utf8JsonWriter w, string name, double value, double defaultValue, int decimals = 2)
     {
-        var rounded = Math.Round(value, 2);
-        if (Math.Abs(rounded - Math.Round(defaultValue, 2)) < 1e-9)
+        var rounded = Math.Round(value, decimals);
+        if (Math.Abs(rounded - Math.Round(defaultValue, decimals)) < 1e-9)
             return;
         w.WriteNumber(name, rounded);
     }
