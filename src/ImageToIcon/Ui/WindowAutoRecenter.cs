@@ -6,7 +6,7 @@ namespace ImageToIcon.Ui;
 
 public static class WindowAutoRecenter
 {
-    private const int ScreenMargin = 16;
+    private const int ScreenMargin = 48;
 
     public static void Attach(Window window)
     {
