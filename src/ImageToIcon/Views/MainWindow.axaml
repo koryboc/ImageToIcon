@@ -209,6 +209,8 @@
     <Window.Resources>
         <DataTemplate x:Key="ThumbTemplate" DataType="m:IconThumb">
             <StackPanel Margin="2" Spacing="2"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Top"
                         Cursor="Hand"
                         Tag="{Binding}"
                         Background="Transparent"
@@ -468,7 +470,7 @@
                 <Rectangle Grid.Column="3" Fill="{DynamicResource AppControlBorderBrush}" />
                 <ToggleButton x:Name="FormatHicolor" Grid.Column="4"
                               Classes="formatSeg"
-                              ToolTip.Tip="Linux hicolor icon set">
+                              ToolTip.Tip="Linux hicolor icon set (.png)">
                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <Canvas Width="12" Height="12">
                             <Ellipse Fill="{Binding $parent[ToggleButton].Foreground}"
