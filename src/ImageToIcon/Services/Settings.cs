@@ -5,8 +5,12 @@ namespace ImageToIcon.Services;
 
 public class Settings
 {
+    public static readonly int[] DefaultIcnsSizes = [1024, 512, 256, 128, 64, 32, 16];
+
     public int[] SelectedSizes { get; set; } = IconFactory.DefaultSizes.ToArray();
     public int[] CustomSizes { get; set; } = [];
+    public bool IcnsFormat { get; set; }
+    public int[] IcnsSelectedSizes { get; set; } = DefaultIcnsSizes.ToArray();
     public bool ShowThumbBorders { get; set; } = true;
     public double CornerRadius { get; set; } = 0.40;
     public double Padding { get; set; } = 0.05;
@@ -65,6 +69,16 @@ public class Settings
             {
                 w.WriteStartArray(nameof(CustomSizes));
                 foreach (var v in CustomSizes) w.WriteNumberValue(v);
+                w.WriteEndArray();
+            }
+
+            if (IcnsFormat != def.IcnsFormat)
+                w.WriteBoolean(nameof(IcnsFormat), IcnsFormat);
+
+            if (!IcnsSelectedSizes.SequenceEqual(def.IcnsSelectedSizes))
+            {
+                w.WriteStartArray(nameof(IcnsSelectedSizes));
+                foreach (var v in IcnsSelectedSizes) w.WriteNumberValue(v);
                 w.WriteEndArray();
             }
 

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using SkiaSharp;
 
@@ -29,6 +30,18 @@ public static class IconFactory
     [
         256, 48, 32, 24, 16
     ];
+
+    // ic11-ic14 are @2x duplicates of icp5/icp6/ic08/ic09; same PNG written under both OSTypes.
+    private static readonly Dictionary<int, string[]> IcnsTypesBySize = new()
+    {
+        { 16, ["icp4"] },
+        { 32, ["icp5", "ic11"] },
+        { 64, ["icp6", "ic12"] },
+        { 128, ["ic07"] },
+        { 256, ["ic08", "ic13"] },
+        { 512, ["ic09", "ic14"] },
+        { 1024, ["ic10"] }
+    };
 
     public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null)
     {
@@ -242,5 +255,53 @@ public static class IconFactory
     private static byte GetByteDim(int v)
     {
         return v >= 256 ? (byte)0 : (byte)v;
+    }
+
+    public static void SaveIcns(IEnumerable<SKBitmap> images, string path)
+    {
+        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+        SaveIcns(images, fs);
+    }
+
+    public static void SaveIcns(IEnumerable<SKBitmap> images, Stream stream)
+    {
+        var list = images
+                   .Where(i => i.Width == i.Height && IcnsTypesBySize.ContainsKey(i.Width))
+                   .GroupBy(i => i.Width)
+                   .Select(g => g.First())
+                   .OrderByDescending(i => i.Width)
+                   .ToArray();
+
+        if (list.Length == 0)
+            throw new InvalidOperationException("No valid images to save.");
+
+        var buffers = new byte[list.Length][];
+        for (var i = 0; i < list.Length; i++)
+        {
+            using var img = SKImage.FromBitmap(list[i]);
+            using var data = img.Encode(SKEncodedImageFormat.Png, 100);
+            buffers[i] = data.ToArray();
+        }
+
+        var totalSize = 8;
+        for (var i = 0; i < list.Length; i++)
+            totalSize += IcnsTypesBySize[list[i].Width].Length * (8 + buffers[i].Length);
+
+        Span<byte> header = stackalloc byte[8];
+        Encoding.ASCII.GetBytes("icns", header[..4]);
+        BinaryPrimitives.WriteUInt32BigEndian(header[4..], (uint)totalSize);
+        stream.Write(header);
+
+        Span<byte> chunkHeader = stackalloc byte[8];
+        for (var i = 0; i < list.Length; i++)
+        {
+            foreach (var type in IcnsTypesBySize[list[i].Width])
+            {
+                Encoding.ASCII.GetBytes(type, chunkHeader[..4]);
+                BinaryPrimitives.WriteUInt32BigEndian(chunkHeader[4..], (uint)(8 + buffers[i].Length));
+                stream.Write(chunkHeader);
+                stream.Write(buffers[i]);
+            }
+        }
     }
 }

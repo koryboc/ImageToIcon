@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _cts = new();
     private readonly Canvas? _fitIconCtrl;
     private readonly Button? _fitModeButtonCtrl;
+    private readonly ObservableCollection<SizeToggle> _icnsToggles = [];
     private readonly Slider? _maskSliderCtrl;
     private readonly TextBlock? _maskValueCtrl;
     private readonly Slider? _paddingSliderCtrl;
@@ -53,6 +54,7 @@ public partial class MainWindow : Window
     private bool _debugPreview;
     private FitMode _fitMode;
     private IconThumb? _focusedThumb;
+    private bool _formatIsIcns;
     private ShadowOutlineState _fxState = new();
     private bool _iconIsDebug;
     private Color _lastBackgroundColor = Colors.White;
@@ -343,6 +345,36 @@ public partial class MainWindow : Window
         if (topKeep != null)
             EnforceTopFrameExclusivity(topKeep);
 
+        var icnsSelected = new HashSet<int>(_settings.IcnsSelectedSizes);
+        foreach (var size in Settings.DefaultIcnsSizes)
+        {
+            var t = new SizeToggle(size, icnsSelected.Contains(size));
+            t.PropertyChanged += OnTogglePropertyChanged;
+            _icnsToggles.Add(t);
+        }
+
+        var formatIco = this.FindControl<ToggleButton>("FormatIco")!;
+        var formatIcns = this.FindControl<ToggleButton>("FormatIcns")!;
+
+        void SelectFormat(bool icns)
+        {
+            formatIco.IsChecked = !icns;
+            formatIcns.IsChecked = icns;
+            addSizeBtn.IsVisible = !icns;
+            if (_formatIsIcns == icns)
+                return;
+            _formatIsIcns = icns;
+            toggles.ItemsSource = ActiveToggles;
+            UpdateAvailability();
+            RebuildThumbs(true);
+        }
+
+        formatIco.Click += (_, _) => SelectFormat(false);
+        formatIcns.Click += (_, _) => SelectFormat(true);
+
+        if (_settings.IcnsFormat)
+            SelectFormat(true);
+
         openBtn.Click += async (_, _) => await OpenImageAsync();
         saveBtn.Click += async (_, _) => await SaveIconAsync();
         addSizeBtn.Click += async (_, _) => await AddCustomSizeAsync();
@@ -366,6 +398,8 @@ public partial class MainWindow : Window
         {
             _settings.SelectedSizes = _sizeToggles.Where(t => t.Size >= 256 ? t.IsUserChecked : t.IsChecked).Select(t => t.Size).ToArray();
             _settings.CustomSizes = _sizeToggles.Where(t => t.IsCustom).Select(t => t.Size).ToArray();
+            _settings.IcnsFormat = _formatIsIcns;
+            _settings.IcnsSelectedSizes = _icnsToggles.Where(t => t.IsChecked).Select(t => t.Size).ToArray();
             _settings.ShowThumbBorders = borderToggle.IsChecked == true;
             var fx = _savedFxState ?? _fxState;
             _settings.ShadowColor = fx.ShadowColor.ToUInt32();
@@ -387,6 +421,8 @@ public partial class MainWindow : Window
         else
             LoadDefaultSymbol();
     }
+
+    private ObservableCollection<SizeToggle> ActiveToggles => _formatIsIcns ? _icnsToggles : _sizeToggles;
 
     private double EffectiveMask => _cornerEnabled ? _maskRadius : 0;
     private double EffectivePadding => _paddingEnabled ? _padding : 0;
@@ -460,6 +496,8 @@ public partial class MainWindow : Window
         var maxDim = Math.Max(_sourceImage.Width, _sourceImage.Height);
         foreach (var t in _sizeToggles)
             t.IsAvailable = t.Size <= maxDim;
+        foreach (var t in _icnsToggles)
+            t.IsAvailable = t.Size <= maxDim;
         PromoteLargestAvailableTopFrame();
         UpdateFitModeAvailability();
         UpdateBgColorAvailability();
@@ -470,7 +508,7 @@ public partial class MainWindow : Window
         if (e.PropertyName != nameof(SizeToggle.IsChecked))
             return;
 
-        if (sender is SizeToggle { Size: >= 256 } top && !_suppressTopFrameSync)
+        if (!_formatIsIcns && sender is SizeToggle { Size: >= 256 } top && !_suppressTopFrameSync)
             HandleTopToggleUserClick(top);
 
         RebuildThumbs();
@@ -879,7 +917,7 @@ public partial class MainWindow : Window
                 t.DisposeContent();
 
         var maxDim = Math.Max(source.Width, source.Height);
-        var desired = _sizeToggles
+        var desired = ActiveToggles
                       .Where(t => t is { IsChecked: true, IsAvailable: true })
                       .Select(t => t.Size)
                       .Where(s => s <= maxDim)
@@ -1276,15 +1314,17 @@ public partial class MainWindow : Window
             // ignored
         }
 
-        var suggested = (_sourceName ?? "icon") + ".ico";
+        var ext = _formatIsIcns ? "icns" : "ico";
+        var suggested = (_sourceName ?? "icon") + "." + ext;
+        var typeLabel = _formatIsIcns ? "Apple icon" : "Windows icon";
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Save Icon",
             SuggestedFileName = suggested,
-            DefaultExtension = "ico",
+            DefaultExtension = ext,
             FileTypeChoices =
             [
-                new FilePickerFileType("Icon file") { Patterns = ["*.ico"] }
+                new FilePickerFileType(typeLabel) { Patterns = ["*." + ext] }
             ]
         });
         if (file == null)
@@ -1309,7 +1349,10 @@ public partial class MainWindow : Window
                 }
             }
 
-            IconFactory.Save(images, file.Path.LocalPath);
+            if (_formatIsIcns)
+                IconFactory.SaveIcns(images, file.Path.LocalPath);
+            else
+                IconFactory.Save(images, file.Path.LocalPath);
         }
         catch (Exception ex)
         {
