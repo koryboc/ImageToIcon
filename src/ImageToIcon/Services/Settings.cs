@@ -10,7 +10,9 @@ public class Settings
     public int[] SelectedSizes { get; set; } = IconFactory.DefaultSizes.ToArray();
     public int[] CustomSizes { get; set; } = [];
     public bool IcnsFormat { get; set; }
+    public bool HicolorFormat { get; set; }
     public int[] IcnsSelectedSizes { get; set; } = DefaultIcnsSizes.ToArray();
+    public int[] HicolorSelectedSizes { get; set; } = IconFactory.DefaultHicolorSizes.ToArray();
     public bool ShowThumbBorders { get; set; } = true;
     public double CornerRadius { get; set; } = 0.40;
     public double Padding { get; set; } = 0.05;
@@ -75,10 +77,20 @@ public class Settings
             if (IcnsFormat != def.IcnsFormat)
                 w.WriteBoolean(nameof(IcnsFormat), IcnsFormat);
 
+            if (HicolorFormat != def.HicolorFormat)
+                w.WriteBoolean(nameof(HicolorFormat), HicolorFormat);
+
             if (!IcnsSelectedSizes.SequenceEqual(def.IcnsSelectedSizes))
             {
                 w.WriteStartArray(nameof(IcnsSelectedSizes));
                 foreach (var v in IcnsSelectedSizes) w.WriteNumberValue(v);
+                w.WriteEndArray();
+            }
+
+            if (!HicolorSelectedSizes.SequenceEqual(def.HicolorSelectedSizes))
+            {
+                w.WriteStartArray(nameof(HicolorSelectedSizes));
+                foreach (var v in HicolorSelectedSizes) w.WriteNumberValue(v);
                 w.WriteEndArray();
             }
 

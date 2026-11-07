@@ -23,6 +23,13 @@ using Point = Avalonia.Point;
 
 namespace ImageToIcon.Views;
 
+public enum IconFormat
+{
+    Ico,
+    Icns,
+    Hicolor
+}
+
 public partial class MainWindow : Window
 {
     private const double PanThresholdPx = 4;
@@ -32,6 +39,7 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _cts = new();
     private readonly Canvas? _fitIconCtrl;
     private readonly Button? _fitModeButtonCtrl;
+    private readonly ObservableCollection<SizeToggle> _hicolorToggles = [];
     private readonly ObservableCollection<SizeToggle> _icnsToggles = [];
     private readonly Slider? _maskSliderCtrl;
     private readonly TextBlock? _maskValueCtrl;
@@ -54,7 +62,7 @@ public partial class MainWindow : Window
     private bool _debugPreview;
     private FitMode _fitMode;
     private IconThumb? _focusedThumb;
-    private bool _formatIsIcns;
+    private IconFormat _format;
     private ShadowOutlineState _fxState = new();
     private bool _iconIsDebug;
     private Color _lastBackgroundColor = Colors.White;
@@ -353,27 +361,42 @@ public partial class MainWindow : Window
             _icnsToggles.Add(t);
         }
 
+        var hicolorSelected = new HashSet<int>(_settings.HicolorSelectedSizes);
+        foreach (var size in IconFactory.DefaultHicolorSizes)
+        {
+            var t = new SizeToggle(size, hicolorSelected.Contains(size));
+            t.PropertyChanged += OnTogglePropertyChanged;
+            _hicolorToggles.Add(t);
+        }
+
         var formatIco = this.FindControl<ToggleButton>("FormatIco")!;
         var formatIcns = this.FindControl<ToggleButton>("FormatIcns")!;
+        var formatHicolor = this.FindControl<ToggleButton>("FormatHicolor")!;
 
-        void SelectFormat(bool icns)
+        void SelectFormat(IconFormat f)
         {
-            formatIco.IsChecked = !icns;
-            formatIcns.IsChecked = icns;
-            addSizeBtn.IsVisible = !icns;
-            if (_formatIsIcns == icns)
+            formatIco.IsChecked = f == IconFormat.Ico;
+            formatIcns.IsChecked = f == IconFormat.Icns;
+            formatHicolor.IsChecked = f == IconFormat.Hicolor;
+            addSizeBtn.IsVisible = f == IconFormat.Ico;
+            if (_format == f)
                 return;
-            _formatIsIcns = icns;
+            _format = f;
             toggles.ItemsSource = ActiveToggles;
             UpdateAvailability();
             RebuildThumbs(true);
         }
 
-        formatIco.Click += (_, _) => SelectFormat(false);
-        formatIcns.Click += (_, _) => SelectFormat(true);
+        formatIco.Click += (_, _) => SelectFormat(IconFormat.Ico);
+        formatIcns.Click += (_, _) => SelectFormat(IconFormat.Icns);
+        formatHicolor.Click += (_, _) => SelectFormat(IconFormat.Hicolor);
 
-        if (_settings.IcnsFormat)
-            SelectFormat(true);
+        if (_settings.HicolorFormat)
+            SelectFormat(IconFormat.Hicolor);
+        else if (_settings.IcnsFormat)
+            SelectFormat(IconFormat.Icns);
+        else
+            SelectFormat(IconFormat.Ico);
 
         openBtn.Click += async (_, _) => await OpenImageAsync();
         saveBtn.Click += async (_, _) => await SaveIconAsync();
@@ -398,7 +421,9 @@ public partial class MainWindow : Window
         {
             _settings.SelectedSizes = _sizeToggles.Where(t => t.Size >= 256 ? t.IsUserChecked : t.IsChecked).Select(t => t.Size).ToArray();
             _settings.CustomSizes = _sizeToggles.Where(t => t.IsCustom).Select(t => t.Size).ToArray();
-            _settings.IcnsFormat = _formatIsIcns;
+            _settings.IcnsFormat = _format == IconFormat.Icns;
+            _settings.HicolorFormat = _format == IconFormat.Hicolor;
+            _settings.HicolorSelectedSizes = _hicolorToggles.Where(t => t.IsChecked).Select(t => t.Size).ToArray();
             _settings.IcnsSelectedSizes = _icnsToggles.Where(t => t.IsChecked).Select(t => t.Size).ToArray();
             _settings.ShowThumbBorders = borderToggle.IsChecked == true;
             var fx = _savedFxState ?? _fxState;
@@ -422,7 +447,12 @@ public partial class MainWindow : Window
             LoadDefaultSymbol();
     }
 
-    private ObservableCollection<SizeToggle> ActiveToggles => _formatIsIcns ? _icnsToggles : _sizeToggles;
+    private ObservableCollection<SizeToggle> ActiveToggles => _format switch
+    {
+        IconFormat.Icns => _icnsToggles,
+        IconFormat.Hicolor => _hicolorToggles,
+        _ => _sizeToggles
+    };
 
     private double EffectiveMask => _cornerEnabled ? _maskRadius : 0;
     private double EffectivePadding => _paddingEnabled ? _padding : 0;
@@ -498,6 +528,8 @@ public partial class MainWindow : Window
             t.IsAvailable = t.Size <= maxDim;
         foreach (var t in _icnsToggles)
             t.IsAvailable = t.Size <= maxDim;
+        foreach (var t in _hicolorToggles)
+            t.IsAvailable = t.Size <= maxDim;
         PromoteLargestAvailableTopFrame();
         UpdateFitModeAvailability();
         UpdateBgColorAvailability();
@@ -508,7 +540,7 @@ public partial class MainWindow : Window
         if (e.PropertyName != nameof(SizeToggle.IsChecked))
             return;
 
-        if (!_formatIsIcns && sender is SizeToggle { Size: >= 256 } top && !_suppressTopFrameSync)
+        if (_format == IconFormat.Ico && sender is SizeToggle { Size: >= 256 } top && !_suppressTopFrameSync)
             HandleTopToggleUserClick(top);
 
         RebuildThumbs();
@@ -1314,19 +1346,36 @@ public partial class MainWindow : Window
             // ignored
         }
 
-        var ext = _formatIsIcns ? "icns" : "ico";
-        var suggested = (_sourceName ?? "icon") + "." + ext;
-        var typeLabel = _formatIsIcns ? "Apple icon" : "Windows icon";
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var baseName = _sourceName ?? "icon";
+        var options = _format switch
         {
-            Title = "Save Icon",
-            SuggestedFileName = suggested,
-            DefaultExtension = ext,
-            FileTypeChoices =
-            [
-                new FilePickerFileType(typeLabel) { Patterns = ["*." + ext] }
-            ]
-        });
+            IconFormat.Icns => new FilePickerSaveOptions
+            {
+                Title = "Save Icon",
+                SuggestedFileName = baseName + ".icns",
+                DefaultExtension = "icns",
+                FileTypeChoices = [new FilePickerFileType("Apple icon") { Patterns = ["*.icns"] }]
+            },
+            IconFormat.Hicolor => new FilePickerSaveOptions
+            {
+                Title = "Save hicolor icon set (filename = base name)",
+                SuggestedFileName = baseName + ".png",
+                DefaultExtension = "png",
+                FileTypeChoices =
+                [
+                    new FilePickerFileType("hicolor folder (PNG set)") { Patterns = ["*.png"] },
+                    new FilePickerFileType("hicolor archive (tar.gz)") { Patterns = ["*.tar.gz"] }
+                ]
+            },
+            _ => new FilePickerSaveOptions
+            {
+                Title = "Save Icon",
+                SuggestedFileName = baseName + ".ico",
+                DefaultExtension = "ico",
+                FileTypeChoices = [new FilePickerFileType("Windows icon") { Patterns = ["*.ico"] }]
+            }
+        };
+        var file = await StorageProvider.SaveFilePickerAsync(options);
         if (file == null)
             return;
         var ordered = _topThumbs.Concat(_smallThumbs)
@@ -1349,10 +1398,50 @@ public partial class MainWindow : Window
                 }
             }
 
-            if (_formatIsIcns)
-                IconFactory.SaveIcns(images, file.Path.LocalPath);
-            else
-                IconFactory.Save(images, file.Path.LocalPath);
+            var path = file.Path.LocalPath;
+            switch (_format)
+            {
+                case IconFormat.Icns:
+                    IconFactory.SaveIcns(images, path);
+                    break;
+                case IconFormat.Hicolor:
+                    var name = Path.GetFileName(path);
+                    if (name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
+                        name.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var archiveStem = name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)
+                            ? name[..^7]
+                            : name[..^4];
+                        if (string.IsNullOrEmpty(archiveStem))
+                            archiveStem = baseName;
+                        IconFactory.SaveHicolorArchive(images, path, archiveStem);
+                    }
+                    else
+                    {
+                        var dir = Path.GetDirectoryName(path) ?? ".";
+                        var stem = Path.GetFileNameWithoutExtension(path);
+                        if (string.IsNullOrEmpty(stem))
+                            stem = baseName;
+                        if (File.Exists(path) && new FileInfo(path).Length == 0)
+                        {
+                            try
+                            {
+                                File.Delete(path);
+                            }
+                            catch
+                            {
+                                /* best-effort */
+                            }
+                        }
+
+                        IconFactory.SaveHicolorFolder(images, dir, stem);
+                    }
+
+                    break;
+                default:
+                    IconFactory.Save(images, path);
+                    break;
+            }
         }
         catch (Exception ex)
         {

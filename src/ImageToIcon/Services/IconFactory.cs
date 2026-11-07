@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Formats.Tar;
+using System.IO.Compression;
 using System.Text;
 using SkiaSharp;
 
@@ -42,6 +44,12 @@ public static class IconFactory
         { 512, ["ic09", "ic14"] },
         { 1024, ["ic10"] }
     };
+
+    // freedesktop.org app-icon sizes placed under hicolor/<size>x<size>/apps/.
+    public static readonly IReadOnlyList<int> DefaultHicolorSizes =
+    [
+        512, 256, 128, 64, 48, 32, 24, 22, 16
+    ];
 
     public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null)
     {
@@ -255,6 +263,52 @@ public static class IconFactory
     private static byte GetByteDim(int v)
     {
         return v >= 256 ? (byte)0 : (byte)v;
+    }
+
+    public static void SaveHicolorFolder(IEnumerable<SKBitmap> images, string directory, string baseName)
+    {
+        foreach (var (size, png) in EncodeHicolorFrames(images))
+        {
+            var dir = Path.Combine(directory, $"{size}x{size}", "apps");
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, baseName + ".png"), png);
+        }
+    }
+
+    public static void SaveHicolorArchive(IEnumerable<SKBitmap> images, string path, string baseName)
+    {
+        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+        using var gz = new GZipStream(fs, CompressionLevel.Optimal);
+        using var tar = new TarWriter(gz, TarEntryFormat.Ustar);
+        foreach (var (size, png) in EncodeHicolorFrames(images))
+        {
+            var entry = new UstarTarEntry(TarEntryType.RegularFile, $"hicolor/{size}x{size}/apps/{baseName}.png")
+            {
+                DataStream = new MemoryStream(png),
+                Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead
+            };
+            tar.WriteEntry(entry);
+        }
+    }
+
+    private static IEnumerable<(int Size, byte[] Png)> EncodeHicolorFrames(IEnumerable<SKBitmap> images)
+    {
+        var list = images
+                   .Where(i => i.Width == i.Height && i.Width is >= MinSize and <= MaxSize)
+                   .GroupBy(i => i.Width)
+                   .Select(g => g.First())
+                   .OrderByDescending(i => i.Width)
+                   .ToArray();
+
+        if (list.Length == 0)
+            throw new InvalidOperationException("No valid images to save.");
+
+        foreach (var bmp in list)
+        {
+            using var img = SKImage.FromBitmap(bmp);
+            using var data = img.Encode(SKEncodedImageFormat.Png, 100);
+            yield return (bmp.Width, data.ToArray());
+        }
     }
 
     public static void SaveIcns(IEnumerable<SKBitmap> images, string path)
