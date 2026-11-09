@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -15,10 +16,13 @@ public sealed class ShadowOutlineState
     public double ShadowOffsetX { get; set; }
     public double ShadowOffsetY { get; set; } = 0.02;
     public double ShadowBlur { get; set; } = 0.01;
+    public bool ShadowIncludesBackground { get; set; } = true;
 
     public bool StrokeEnabled { get; set; }
     public Color StrokeColor { get; set; } = Color.FromArgb(128, 0, 0, 0);
     public double StrokeWidth { get; set; } = 0.01;
+    public double StrokeOffset { get; set; }
+    public bool StrokeIncludesBackground { get; set; } = true;
 
     public bool AnyEnabled => ShadowEnabled || StrokeEnabled;
 
@@ -27,7 +31,7 @@ public sealed class ShadowOutlineState
         : null;
 
     public StrokeSpec? Stroke => StrokeEnabled
-        ? new StrokeSpec(new SKColor(StrokeColor.R, StrokeColor.G, StrokeColor.B, StrokeColor.A), StrokeWidth)
+        ? new StrokeSpec(new SKColor(StrokeColor.R, StrokeColor.G, StrokeColor.B, StrokeColor.A), StrokeWidth, StrokeOffset)
         : null;
 
     public ShadowOutlineState Clone()
@@ -39,9 +43,12 @@ public sealed class ShadowOutlineState
             ShadowOffsetX = ShadowOffsetX,
             ShadowOffsetY = ShadowOffsetY,
             ShadowBlur = ShadowBlur,
+            ShadowIncludesBackground = ShadowIncludesBackground,
             StrokeEnabled = StrokeEnabled,
             StrokeColor = StrokeColor,
-            StrokeWidth = StrokeWidth
+            StrokeWidth = StrokeWidth,
+            StrokeOffset = StrokeOffset,
+            StrokeIncludesBackground = StrokeIncludesBackground
         };
     }
 }
@@ -51,7 +58,8 @@ public static class ShadowOutlineFlyout
     public static void Show(
         Control anchor,
         ShadowOutlineState state,
-        Action onChanged)
+        Action onChanged,
+        bool canToggleScope = false)
     {
         var defaults = new ShadowOutlineState();
 
@@ -71,13 +79,29 @@ public static class ShadowOutlineFlyout
         bool StrokeAtDefault()
         {
             return state.StrokeColor == defaults.StrokeColor
-                   && Pct(state.StrokeWidth) == Pct(defaults.StrokeWidth);
+                   && Pct(state.StrokeWidth) == Pct(defaults.StrokeWidth)
+                   && Pct(state.StrokeOffset) == Pct(defaults.StrokeOffset);
         }
 
         var shadowReset = BuildResetButton();
         var strokeReset = BuildResetButton();
         shadowReset.IsEnabled = !ShadowAtDefault();
         strokeReset.IsEnabled = !StrokeAtDefault();
+
+        var shadowScope = canToggleScope ? BuildScopeToggle(state.ShadowIncludesBackground) : null;
+        var strokeScope = canToggleScope ? BuildScopeToggle(state.StrokeIncludesBackground) : null;
+        if (shadowScope != null)
+            shadowScope.IsCheckedChanged += (_, _) =>
+            {
+                state.ShadowIncludesBackground = shadowScope.IsChecked == true;
+                onChanged();
+            };
+        if (strokeScope != null)
+            strokeScope.IsCheckedChanged += (_, _) =>
+            {
+                state.StrokeIncludesBackground = strokeScope.IsChecked == true;
+                onChanged();
+            };
 
         void Changed()
         {
@@ -95,6 +119,7 @@ public static class ShadowOutlineFlyout
         var strokeEnable = new CheckBox { Content = "Stroke", IsChecked = state.StrokeEnabled, FontWeight = FontWeight.SemiBold };
         var strokeSwatch = BuildSwatch(state.StrokeColor);
         var strokeWidth = BuildPercentSlider(0, 10, state.StrokeWidth, out var strokeWidthLbl);
+        var strokeOffset = BuildPercentSlider(0, 100, state.StrokeOffset, out var strokeOffsetLbl);
 
         shadowReset.Click += (_, _) =>
         {
@@ -114,8 +139,10 @@ public static class ShadowOutlineFlyout
             var d = new ShadowOutlineState();
             state.StrokeColor = d.StrokeColor;
             state.StrokeWidth = d.StrokeWidth;
+            state.StrokeOffset = d.StrokeOffset;
             SetSwatch(strokeSwatch, state.StrokeColor);
             strokeWidth.Value = state.StrokeWidth * 100.0;
+            strokeOffset.Value = state.StrokeOffset * 100.0;
             Changed();
         };
 
@@ -150,41 +177,63 @@ public static class ShadowOutlineFlyout
             state.StrokeWidth = v;
             Changed();
         });
+        AttachSlider(strokeOffset, strokeOffsetLbl, strokeEnable, v =>
+        {
+            state.StrokeOffset = v;
+            Changed();
+        });
 
         var shadowGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("60,*,28"),
+            ColumnDefinitions = new ColumnDefinitions(canToggleScope ? "60,*,Auto,28" : "60,*,28"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
             RowSpacing = 2, ColumnSpacing = 6
         };
+        var shadowHeaderEndCol = canToggleScope ? 3 : 2;
         Grid.SetColumn(shadowEnable, 0);
         Grid.SetColumnSpan(shadowEnable, 2);
         Grid.SetRow(shadowEnable, 0);
         shadowGrid.Children.Add(shadowEnable);
-        Grid.SetColumn(shadowReset, 2);
+        if (shadowScope != null)
+        {
+            Grid.SetColumn(shadowScope, 2);
+            Grid.SetRow(shadowScope, 0);
+            shadowGrid.Children.Add(shadowScope);
+        }
+
+        Grid.SetColumn(shadowReset, shadowHeaderEndCol);
         Grid.SetRow(shadowReset, 0);
         shadowGrid.Children.Add(shadowReset);
-        AddRow(shadowGrid, 1, "Color", shadowSwatch, null);
-        AddRow(shadowGrid, 2, "Offset X", shadowOffX, shadowOffXLbl);
-        AddRow(shadowGrid, 3, "Offset Y", shadowOffY, shadowOffYLbl);
-        AddRow(shadowGrid, 4, "Blur", shadowBlur, shadowBlurLbl);
+        AddRow(shadowGrid, 1, "Color", shadowSwatch, null, shadowHeaderEndCol);
+        AddRow(shadowGrid, 2, "Offset X", shadowOffX, shadowOffXLbl, shadowHeaderEndCol);
+        AddRow(shadowGrid, 3, "Offset Y", shadowOffY, shadowOffYLbl, shadowHeaderEndCol);
+        AddRow(shadowGrid, 4, "Blur", shadowBlur, shadowBlurLbl, shadowHeaderEndCol);
 
         var strokeGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("60,*,28"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions(canToggleScope ? "60,*,Auto,28" : "60,*,28"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
             RowSpacing = 2, ColumnSpacing = 6,
             Margin = new Thickness(0, 6, 0, 0)
         };
+        var strokeHeaderEndCol = canToggleScope ? 3 : 2;
         Grid.SetColumn(strokeEnable, 0);
         Grid.SetColumnSpan(strokeEnable, 2);
         Grid.SetRow(strokeEnable, 0);
         strokeGrid.Children.Add(strokeEnable);
-        Grid.SetColumn(strokeReset, 2);
+        if (strokeScope != null)
+        {
+            Grid.SetColumn(strokeScope, 2);
+            Grid.SetRow(strokeScope, 0);
+            strokeGrid.Children.Add(strokeScope);
+        }
+
+        Grid.SetColumn(strokeReset, strokeHeaderEndCol);
         Grid.SetRow(strokeReset, 0);
         strokeGrid.Children.Add(strokeReset);
-        AddRow(strokeGrid, 1, "Color", strokeSwatch, null);
-        AddRow(strokeGrid, 2, "Width", strokeWidth, strokeWidthLbl);
+        AddRow(strokeGrid, 1, "Color", strokeSwatch, null, strokeHeaderEndCol);
+        AddRow(strokeGrid, 2, "Width", strokeWidth, strokeWidthLbl, strokeHeaderEndCol);
+        AddRow(strokeGrid, 3, "Offset", strokeOffset, strokeOffsetLbl, strokeHeaderEndCol);
 
         var root = new StackPanel
         {
@@ -307,21 +356,40 @@ public static class ShadowOutlineFlyout
             r.Fill = new SolidColorBrush(color);
     }
 
-    private static void AddRow(Grid grid, int row, string label, Control control, TextBlock? valueLbl)
+    private static void AddRow(Grid grid, int row, string label, Control control, TextBlock? valueLbl, int valueCol = 2)
     {
         var lbl = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 11 };
         Grid.SetColumn(lbl, 0);
         Grid.SetRow(lbl, row);
         Grid.SetColumn(control, 1);
+        Grid.SetColumnSpan(control, Math.Max(1, valueCol - 1));
         Grid.SetRow(control, row);
         grid.Children.Add(lbl);
         grid.Children.Add(control);
         if (valueLbl != null)
         {
-            Grid.SetColumn(valueLbl, 2);
+            Grid.SetColumn(valueLbl, valueCol);
             Grid.SetRow(valueLbl, row);
             grid.Children.Add(valueLbl);
         }
+    }
+
+    private static ToggleButton BuildScopeToggle(bool isChecked)
+    {
+        var btn = new ToggleButton
+        {
+            Content = "\u29C9",
+            FontSize = 12,
+            Width = 22,
+            Height = 18,
+            MinHeight = 0,
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            IsChecked = isChecked
+        };
+        ToolTip.SetTip(btn, "Include background in effect");
+        return btn;
     }
 
     private static string Fmt(double v)

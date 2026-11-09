@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -13,6 +14,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ImageToIcon.Models;
 using ImageToIcon.Platform;
 using ImageToIcon.Services;
@@ -55,6 +57,7 @@ public partial class MainWindow : Window
     private readonly Button _updateBtn;
     private SKColor? _backgroundColor;
     private CancellationTokenSource? _bgDebounceCts;
+    private bool _bgPipetteActive;
     private bool _bgTestingMode = true;
     private bool _cornerEnabled;
     private double _cropOffsetX;
@@ -120,6 +123,7 @@ public partial class MainWindow : Window
         _fxState.ShadowBlur = _settings.ShadowBlur;
         _fxState.StrokeColor = Color.FromUInt32(_settings.StrokeColor);
         _fxState.StrokeWidth = _settings.StrokeWidth;
+        _fxState.StrokeOffset = _settings.StrokeOffset;
         _maskRadius = _settings.CornerRadius;
         _padding = _settings.Padding;
 
@@ -136,7 +140,7 @@ public partial class MainWindow : Window
         _bgColorToggleCtrl = bgColorToggle;
         bgColorToggle.Click += (_, _) => ShowBackgroundColorFlyout();
         var fxButton = this.FindControl<Button>("FxButton")!;
-        fxButton.Click += (_, _) => ShadowOutlineFlyout.Show(fxButton, _fxState, DebouncedBgRebuild);
+        fxButton.Click += (_, _) => ShadowOutlineFlyout.Show(fxButton, _fxState, DebouncedBgRebuild, _backgroundColor.HasValue && !_bgTestingMode);
         var debugToggle = this.FindControl<ToggleButton>("DebugToggle")!;
         debugToggle.Click += (_, _) =>
         {
@@ -434,6 +438,7 @@ public partial class MainWindow : Window
             _settings.ShadowBlur = fx.ShadowBlur;
             _settings.StrokeColor = fx.StrokeColor.ToUInt32();
             _settings.StrokeWidth = fx.StrokeWidth;
+            _settings.StrokeOffset = fx.StrokeOffset;
             _settings.CornerRadius = _debugPreview ? _savedMaskRadius : _maskRadius;
             _settings.Padding = _debugPreview ? _savedPadding : _padding;
             _settings.Save();
@@ -690,6 +695,13 @@ public partial class MainWindow : Window
             Child = view
         };
 
+        var pickBtn = new Button
+        {
+            Content = "Pick",
+            Margin = new Thickness(0, 0, 4, 0)
+        };
+        ToolTip.SetTip(pickBtn, "Pick a color from a thumbnail");
+
         var clearBtn = new Button
         {
             Content = "Clear",
@@ -705,14 +717,20 @@ public partial class MainWindow : Window
         };
         ToolTip.SetTip(testingCheck, "Preview only: fills the whole canvas and is dropped on save");
 
+        var rightPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { pickBtn, clearBtn }
+        };
+
         var bottomBar = new Grid
         {
             Margin = new Thickness(10, 0, 10, 6),
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            Children = { testingCheck, clearBtn }
+            Children = { testingCheck, rightPanel }
         };
         Grid.SetColumn(testingCheck, 0);
-        Grid.SetColumn(clearBtn, 1);
+        Grid.SetColumn(rightPanel, 1);
 
         var panel = new StackPanel
         {
@@ -744,6 +762,12 @@ public partial class MainWindow : Window
             RebuildThumbs(true);
         };
 
+        pickBtn.Click += (_, _) =>
+        {
+            flyout.Hide();
+            BeginBgPipette();
+        };
+
         testingCheck.IsCheckedChanged += (_, _) =>
         {
             var next = testingCheck.IsChecked == true;
@@ -755,6 +779,85 @@ public partial class MainWindow : Window
         };
 
         flyout.ShowAt(_bgColorToggleCtrl);
+    }
+
+    private void BeginBgPipette()
+    {
+        _bgPipetteActive = true;
+        Cursor = new Cursor(StandardCursorType.Cross);
+        SetThumbCursors(Cursor);
+        AddHandler(KeyDownEvent, OnPipetteKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    private void EndBgPipette()
+    {
+        if (!_bgPipetteActive)
+            return;
+        _bgPipetteActive = false;
+        Cursor = Cursor.Default;
+        SetThumbCursors(new Cursor(StandardCursorType.Hand));
+        RemoveHandler(KeyDownEvent, OnPipetteKeyDown);
+    }
+
+    private void OnPipetteKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+            return;
+        EndBgPipette();
+        e.Handled = true;
+    }
+
+    private void SetThumbCursors(Cursor cursor)
+    {
+        foreach (var c in this.GetVisualDescendants().OfType<Control>())
+            if (c.Tag is IconThumb)
+                c.Cursor = cursor;
+    }
+
+    private void SamplePipetteFromThumb(Control container, PointerPressedEventArgs e)
+    {
+        try
+        {
+            var image = container.GetVisualDescendants().OfType<Image>().FirstOrDefault();
+            if (image?.Source is not WriteableBitmap wb)
+                return;
+            if (image.Bounds.Width <= 0 || image.Bounds.Height <= 0)
+                return;
+            var pos = e.GetPosition(image);
+            var w = wb.PixelSize.Width;
+            var h = wb.PixelSize.Height;
+            var px = (int)Math.Clamp(pos.X / image.Bounds.Width * w, 0, w - 1);
+            var py = (int)Math.Clamp(pos.Y / image.Bounds.Height * h, 0, h - 1);
+            byte b, g, r, a;
+            using (var fb = wb.Lock())
+            {
+                var row = fb.Address + py * fb.RowBytes;
+                b = Marshal.ReadByte(row, px * 4 + 0);
+                g = Marshal.ReadByte(row, px * 4 + 1);
+                r = Marshal.ReadByte(row, px * 4 + 2);
+                a = Marshal.ReadByte(row, px * 4 + 3);
+            }
+
+            switch (a)
+            {
+                case 0:
+                    return;
+                case < 255:
+                    r = (byte)Math.Min(255, r * 255 / a);
+                    g = (byte)Math.Min(255, g * 255 / a);
+                    b = (byte)Math.Min(255, b * 255 / a);
+                    break;
+            }
+
+            var color = Color.FromArgb(a, r, g, b);
+            _lastBackgroundColor = color;
+            _backgroundColor = new SKColor(r, g, b, a);
+            DebouncedBgRebuild();
+        }
+        finally
+        {
+            EndBgPipette();
+        }
     }
 
     private SKBitmap? EffectiveSourceForControls()
@@ -957,7 +1060,7 @@ public partial class MainWindow : Window
             {
                 var (resized, preview) = await Task.Run(() =>
                 {
-                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, liveZoom, _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode);
+                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, liveZoom, _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode && _fxState.ShadowIncludesBackground, !_bgTestingMode && _fxState.StrokeIncludesBackground, _bgTestingMode);
                     var p = IconThumb.ToAvaloniaBitmap(r);
                     return (r, p);
                 }, ct);
@@ -1020,7 +1123,7 @@ public partial class MainWindow : Window
             {
                 ct.ThrowIfCancellationRequested();
                 var thumbSource = SourceFor(thumb) ?? source;
-                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), ZoomFor(thumb), _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode);
+                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), ZoomFor(thumb), _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode && _fxState.ShadowIncludesBackground, !_bgTestingMode && _fxState.StrokeIncludesBackground, _bgTestingMode);
                 var preview = IconThumb.ToAvaloniaBitmap(resized);
                 if (ct.IsCancellationRequested)
                 {
@@ -1427,7 +1530,7 @@ public partial class MainWindow : Window
                 {
                     var src = SourceFor(t);
                     if (src != null)
-                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), ZoomFor(t), _bgTestingMode ? null : _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode));
+                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), ZoomFor(t), _bgTestingMode ? null : _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode && _fxState.ShadowIncludesBackground, !_bgTestingMode && _fxState.StrokeIncludesBackground));
                 }
             }
 
@@ -1592,6 +1695,19 @@ public partial class MainWindow : Window
         var right = props.IsRightButtonPressed;
         if (!props.IsLeftButtonPressed && !right)
             return;
+
+        if (_bgPipetteActive)
+        {
+            e.Handled = true;
+            if (right)
+            {
+                EndBgPipette();
+                return;
+            }
+
+            SamplePipetteFromThumb(c, e);
+            return;
+        }
 
         _pressedThumb = thumb;
         _pressedThumbWasRight = right;

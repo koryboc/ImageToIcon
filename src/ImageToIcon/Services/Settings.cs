@@ -22,6 +22,7 @@ public class Settings
     public double ShadowBlur { get; set; } = 0.01;
     public uint StrokeColor { get; set; } = 0x80000000;
     public double StrokeWidth { get; set; } = 0.01;
+    public double StrokeOffset { get; set; }
     public DateTime LastUpdateCheckUtc { get; set; }
     public string PendingUpdateVersion { get; set; } = "";
 
@@ -107,6 +108,7 @@ public class Settings
             if (StrokeColor != def.StrokeColor)
                 w.WriteNumber(nameof(StrokeColor), StrokeColor);
             WriteDouble(w, nameof(StrokeWidth), StrokeWidth, def.StrokeWidth);
+            WriteDouble(w, nameof(StrokeOffset), StrokeOffset, def.StrokeOffset);
 
             if (LastUpdateCheckUtc != def.LastUpdateCheckUtc)
                 w.WriteString(nameof(LastUpdateCheckUtc), LastUpdateCheckUtc);

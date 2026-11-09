@@ -16,7 +16,7 @@ public enum FitMode
 // All offsets/blur/width are fractions of the output size (0..1).
 public readonly record struct ShadowSpec(SKColor Color, double OffsetX, double OffsetY, double Blur);
 
-public readonly record struct StrokeSpec(SKColor Color, double Width);
+public readonly record struct StrokeSpec(SKColor Color, double Width, double Offset = 0);
 
 // Cross-platform ICO writer. Ported from SilDev.Drawing.IconFactory, now on SkiaSharp.
 public static class IconFactory
@@ -51,17 +51,17 @@ public static class IconFactory
         512, 256, 128, 64, 48, 32, 24, 22, 16
     ];
 
-    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null, bool backgroundRespectsShape = false)
+    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null, bool shadowIncludesBackground = false, bool strokeIncludesBackground = false, bool backgroundFillsCanvas = false)
     {
         var maxDim = Math.Max(source.Width, source.Height);
         foreach (var s in sizes.OrderByDescending(x => x))
         {
             if (s > maxDim || s < MinSize || s > MaxSize) continue;
-            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY, cropZoom, background, shadow, stroke, backgroundRespectsShape);
+            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY, cropZoom, background, shadow, stroke, shadowIncludesBackground, strokeIncludesBackground, backgroundFillsCanvas);
         }
     }
 
-    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null, bool backgroundRespectsShape = false)
+    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null, bool shadowIncludesBackground = false, bool strokeIncludesBackground = false, bool backgroundFillsCanvas = false)
     {
         var padPx = (int)(Math.Clamp(padding, 0, 1) * size);
         var inner = Math.Max(1, size - 2 * padPx);
@@ -104,80 +104,216 @@ public static class IconFactory
         var cornerR = maskRadius > 0 ? (float)(Math.Clamp(maskRadius, 0, 1) * inner / 2.0) : 0f;
         var hasMask = maskRadius > 0;
 
-        var bgInShape = background is not null && backgroundRespectsShape;
-        canvas.Clear(bgInShape ? SKColors.Transparent : background ?? SKColors.Transparent);
-
         var hasShadow = shadow is { Color.Alpha: > 0 };
         var hasStroke = stroke is { Color.Alpha: > 0, Width: > 0 };
+        var hasBg = background is not null;
+        var bgFill = hasBg && backgroundFillsCanvas;
+        var bgShape = hasBg && !backgroundFillsCanvas;
+        var shadowWithBg = bgShape && shadowIncludesBackground;
+        var strokeWithBg = bgShape && strokeIncludesBackground;
 
-        if (hasShadow || hasStroke)
-        {
-            using var layer = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
-            using (var lc = new SKCanvas(layer))
-            {
-                lc.Clear(SKColors.Transparent);
-                if (hasMask)
-                    lc.ClipRoundRect(new SKRoundRect(clipRect, cornerR, cornerR), antialias: true);
-                else if (mode == FitMode.Crop || bgInShape)
-                    lc.ClipRect(clipRect);
-                if (bgInShape)
-                {
-                    using var bgPaint = new SKPaint();
-                    bgPaint.Color = background!.Value;
-                    bgPaint.IsAntialias = true;
-                    lc.DrawRect(clipRect, bgPaint);
-                }
+        canvas.Clear(bgFill ? background!.Value : SKColors.Transparent);
 
-                using var img = SKImage.FromBitmap(resized);
-                lc.DrawImage(img, imageRect);
-            }
-
-            using var layerImg = SKImage.FromBitmap(layer);
-
-            if (hasShadow)
-            {
-                var sh = shadow!.Value;
-                var sigma = (float)Math.Max(0, sh.Blur * size);
-                using var shadowPaint = new SKPaint();
-                shadowPaint.ImageFilter = SKImageFilter.CreateDropShadowOnly((float)(sh.OffsetX * size), (float)(sh.OffsetY * size), sigma, sigma, sh.Color);
-                canvas.DrawImage(layerImg, 0, 0, shadowPaint);
-            }
-
-            if (hasStroke)
-            {
-                var st = stroke!.Value;
-                var r = (float)Math.Max(0.5, st.Width * size);
-                using var strokePaint = new SKPaint();
-                strokePaint.ImageFilter = SKImageFilter.CreateDilate(r, r);
-                strokePaint.ColorFilter = SKColorFilter.CreateBlendMode(st.Color, SKBlendMode.SrcIn);
-                strokePaint.IsAntialias = true;
-                canvas.DrawImage(layerImg, 0, 0, strokePaint);
-            }
-
-            canvas.DrawImage(layerImg, 0, 0);
-        }
-        else
+        if (!hasShadow && !hasStroke)
         {
             canvas.Save();
             if (hasMask)
                 canvas.ClipRoundRect(new SKRoundRect(clipRect, cornerR, cornerR), antialias: true);
-            else if (mode == FitMode.Crop || bgInShape)
+            else if (bgShape || mode == FitMode.Crop)
                 canvas.ClipRect(clipRect);
-            if (bgInShape)
+            if (bgShape)
+            {
+                using var bgPaint0 = new SKPaint();
+                bgPaint0.Color = background!.Value;
+                bgPaint0.IsAntialias = true;
+                canvas.DrawRect(clipRect, bgPaint0);
+            }
+
+            using var img0 = SKImage.FromBitmap(resized);
+            canvas.DrawImage(img0, imageRect);
+            canvas.Restore();
+            canvas.Flush();
+            return result;
+        }
+
+        SKBitmap BuildLayer(bool withBg)
+        {
+            var bmp = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
+            using var lc = new SKCanvas(bmp);
+            lc.Clear(SKColors.Transparent);
+            if (hasMask)
+                lc.ClipRoundRect(new SKRoundRect(clipRect, cornerR, cornerR), antialias: true);
+            else if (mode == FitMode.Crop || withBg)
+                lc.ClipRect(clipRect);
+            if (withBg)
             {
                 using var bgPaint = new SKPaint();
                 bgPaint.Color = background!.Value;
                 bgPaint.IsAntialias = true;
-                canvas.DrawRect(clipRect, bgPaint);
+                lc.DrawRect(clipRect, bgPaint);
             }
 
             using var img = SKImage.FromBitmap(resized);
-            canvas.DrawImage(img, imageRect);
+            lc.DrawImage(img, imageRect);
+            return bmp;
+        }
+
+        SKBitmap? imageLayerBmp = null, bgLayerBmp = null;
+        SKImage? imageLayerImg = null, bgLayerImg = null;
+
+        SKImage LayerFor(bool withBg)
+        {
+            if (withBg)
+            {
+                if (bgLayerImg != null) return bgLayerImg;
+                bgLayerBmp = BuildLayer(true);
+                bgLayerImg = SKImage.FromBitmap(bgLayerBmp);
+                return bgLayerImg;
+            }
+
+            if (imageLayerImg != null) return imageLayerImg;
+            imageLayerBmp = BuildLayer(false);
+            imageLayerImg = SKImage.FromBitmap(imageLayerBmp);
+            return imageLayerImg;
+        }
+
+        void DrawShadow()
+        {
+            if (!hasShadow) return;
+            var sh = shadow!.Value;
+            var sigma = (float)Math.Max(0, sh.Blur * size);
+            using var shadowPaint = new SKPaint();
+            shadowPaint.ImageFilter = SKImageFilter.CreateDropShadowOnly((float)(sh.OffsetX * size), (float)(sh.OffsetY * size), sigma, sigma, sh.Color);
+            canvas.DrawImage(LayerFor(shadowWithBg), 0, 0, shadowPaint);
+        }
+
+        void DrawBg()
+        {
+            if (!bgShape) return;
+            canvas.Save();
+            if (hasMask)
+                canvas.ClipRoundRect(new SKRoundRect(clipRect, cornerR, cornerR), antialias: true);
+            else
+                canvas.ClipRect(clipRect);
+            using var bgPaint = new SKPaint();
+            bgPaint.Color = background!.Value;
+            bgPaint.IsAntialias = true;
+            canvas.DrawRect(clipRect, bgPaint);
             canvas.Restore();
         }
 
-        canvas.Flush();
-        return result;
+        try
+        {
+            if (shadowWithBg)
+            {
+                DrawShadow();
+                DrawBg();
+            }
+            else
+            {
+                DrawBg();
+                DrawShadow();
+            }
+
+            float innerR = 0;
+            if (hasStroke)
+            {
+                var st = stroke!.Value;
+                var r = (float)Math.Max(0.5, st.Width * size);
+                var off = (float)Math.Clamp(st.Offset, 0, 1);
+                var outerR = r * (1 - off);
+                innerR = r * off;
+
+                if (outerR > 0.05f)
+                {
+                    var subject = LayerFor(strokeWithBg);
+
+                    using var dilated = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
+                    using (var dc = new SKCanvas(dilated))
+                    {
+                        dc.Clear(SKColors.Transparent);
+                        using var dp = new SKPaint();
+                        dp.ImageFilter = SKImageFilter.CreateDilate(outerR, outerR);
+                        dc.DrawImage(subject, 0, 0, dp);
+                    }
+
+                    using var dilatedImg = SKImage.FromBitmap(dilated);
+
+                    using var outerRing = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
+                    using (var orc = new SKCanvas(outerRing))
+                    {
+                        orc.Clear(SKColors.Transparent);
+                        using var fillPaint = new SKPaint();
+                        fillPaint.ColorFilter = SKColorFilter.CreateBlendMode(st.Color, SKBlendMode.SrcIn);
+                        fillPaint.IsAntialias = true;
+                        orc.DrawImage(dilatedImg, 0, 0, fillPaint);
+
+                        using var cutPaint = new SKPaint();
+                        cutPaint.BlendMode = SKBlendMode.DstOut;
+                        orc.DrawImage(subject, 0, 0, cutPaint);
+                    }
+
+                    using var outerRingImg = SKImage.FromBitmap(outerRing);
+                    canvas.DrawImage(outerRingImg, 0, 0);
+                }
+            }
+
+            canvas.Save();
+            if (hasMask)
+                canvas.ClipRoundRect(new SKRoundRect(clipRect, cornerR, cornerR), antialias: true);
+            else if (mode == FitMode.Crop)
+                canvas.ClipRect(clipRect);
+            using (var finalImg = SKImage.FromBitmap(resized))
+            {
+                canvas.DrawImage(finalImg, imageRect);
+            }
+
+            canvas.Restore();
+
+            if (hasStroke && innerR > 0.05f)
+            {
+                var st = stroke!.Value;
+                var subject = LayerFor(strokeWithBg);
+
+                using var eroded = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
+                using (var ec = new SKCanvas(eroded))
+                {
+                    ec.Clear(SKColors.Transparent);
+                    using var ep = new SKPaint();
+                    ep.ImageFilter = SKImageFilter.CreateErode(innerR, innerR);
+                    ec.DrawImage(subject, 0, 0, ep);
+                }
+
+                using var erodedImg = SKImage.FromBitmap(eroded);
+
+                using var ring = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
+                using (var rc = new SKCanvas(ring))
+                {
+                    rc.Clear(SKColors.Transparent);
+                    using var fillPaint = new SKPaint();
+                    fillPaint.ColorFilter = SKColorFilter.CreateBlendMode(st.Color, SKBlendMode.SrcIn);
+                    fillPaint.IsAntialias = true;
+                    rc.DrawImage(subject, 0, 0, fillPaint);
+
+                    using var cutPaint = new SKPaint();
+                    cutPaint.BlendMode = SKBlendMode.DstOut;
+                    rc.DrawImage(erodedImg, 0, 0, cutPaint);
+                }
+
+                using var ringImg = SKImage.FromBitmap(ring);
+                canvas.DrawImage(ringImg, 0, 0);
+            }
+
+            canvas.Flush();
+            return result;
+        }
+        finally
+        {
+            imageLayerImg?.Dispose();
+            bgLayerImg?.Dispose();
+            imageLayerBmp?.Dispose();
+            bgLayerBmp?.Dispose();
+        }
     }
 
     public static SKBitmap Copy(SKBitmap source)
