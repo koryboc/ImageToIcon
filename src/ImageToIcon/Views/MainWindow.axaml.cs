@@ -54,8 +54,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<IconThumb> _topThumbs = [];
     private readonly Button _updateBtn;
     private SKColor? _backgroundColor;
-    private bool _bgTestingMode = true;
     private CancellationTokenSource? _bgDebounceCts;
+    private bool _bgTestingMode = true;
     private bool _cornerEnabled;
     private double _cropOffsetX;
     private double _cropOffsetY;

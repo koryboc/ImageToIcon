@@ -104,7 +104,7 @@ public static class IconFactory
         var cornerR = maskRadius > 0 ? (float)(Math.Clamp(maskRadius, 0, 1) * inner / 2.0) : 0f;
         var hasMask = maskRadius > 0;
 
-        var bgInShape = background is { } && backgroundRespectsShape;
+        var bgInShape = background is not null && backgroundRespectsShape;
         canvas.Clear(bgInShape ? SKColors.Transparent : background ?? SKColors.Transparent);
 
         var hasShadow = shadow is { Color.Alpha: > 0 };
@@ -127,6 +127,7 @@ public static class IconFactory
                     bgPaint.IsAntialias = true;
                     lc.DrawRect(clipRect, bgPaint);
                 }
+
                 using var img = SKImage.FromBitmap(resized);
                 lc.DrawImage(img, imageRect);
             }
@@ -169,6 +170,7 @@ public static class IconFactory
                 bgPaint.IsAntialias = true;
                 canvas.DrawRect(clipRect, bgPaint);
             }
+
             using var img = SKImage.FromBitmap(resized);
             canvas.DrawImage(img, imageRect);
             canvas.Restore();
