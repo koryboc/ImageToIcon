@@ -51,17 +51,17 @@ public static class IconFactory
         512, 256, 128, 64, 48, 32, 24, 22, 16
     ];
 
-    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null)
+    public static IEnumerable<SKBitmap> BuildSizes(SKBitmap source, IEnumerable<int> sizes, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null, bool backgroundRespectsShape = false)
     {
         var maxDim = Math.Max(source.Width, source.Height);
         foreach (var s in sizes.OrderByDescending(x => x))
         {
             if (s > maxDim || s < MinSize || s > MaxSize) continue;
-            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY, cropZoom, background, shadow, stroke);
+            yield return ResizePadded(source, s, maskRadius, padding, mode, cropOffsetX, cropOffsetY, cropZoom, background, shadow, stroke, backgroundRespectsShape);
         }
     }
 
-    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null)
+    public static SKBitmap ResizePadded(SKBitmap source, int size, double maskRadius = 0, double padding = 0, FitMode mode = FitMode.Fit, double cropOffsetX = 0, double cropOffsetY = 0, double cropZoom = 1, SKColor? background = null, ShadowSpec? shadow = null, StrokeSpec? stroke = null, bool backgroundRespectsShape = false)
     {
         var padPx = (int)(Math.Clamp(padding, 0, 1) * size);
         var inner = Math.Max(1, size - 2 * padPx);
@@ -99,12 +99,13 @@ public static class IconFactory
 
         var result = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
         using var canvas = new SKCanvas(result);
-        canvas.Clear(background ?? SKColors.Transparent);
-
         var clipRect = new SKRect(padPx, padPx, padPx + inner, padPx + inner);
         var imageRect = new SKRect(dx, dy, dx + w, dy + h);
         var cornerR = maskRadius > 0 ? (float)(Math.Clamp(maskRadius, 0, 1) * inner / 2.0) : 0f;
         var hasMask = maskRadius > 0;
+
+        var bgInShape = background is { } && backgroundRespectsShape;
+        canvas.Clear(bgInShape ? SKColors.Transparent : background ?? SKColors.Transparent);
 
         var hasShadow = shadow is { Color.Alpha: > 0 };
         var hasStroke = stroke is { Color.Alpha: > 0, Width: > 0 };
@@ -117,8 +118,15 @@ public static class IconFactory
                 lc.Clear(SKColors.Transparent);
                 if (hasMask)
                     lc.ClipRoundRect(new SKRoundRect(clipRect, cornerR, cornerR), antialias: true);
-                else if (mode == FitMode.Crop)
+                else if (mode == FitMode.Crop || bgInShape)
                     lc.ClipRect(clipRect);
+                if (bgInShape)
+                {
+                    using var bgPaint = new SKPaint();
+                    bgPaint.Color = background!.Value;
+                    bgPaint.IsAntialias = true;
+                    lc.DrawRect(clipRect, bgPaint);
+                }
                 using var img = SKImage.FromBitmap(resized);
                 lc.DrawImage(img, imageRect);
             }
@@ -152,8 +160,15 @@ public static class IconFactory
             canvas.Save();
             if (hasMask)
                 canvas.ClipRoundRect(new SKRoundRect(clipRect, cornerR, cornerR), antialias: true);
-            else if (mode == FitMode.Crop)
+            else if (mode == FitMode.Crop || bgInShape)
                 canvas.ClipRect(clipRect);
+            if (bgInShape)
+            {
+                using var bgPaint = new SKPaint();
+                bgPaint.Color = background!.Value;
+                bgPaint.IsAntialias = true;
+                canvas.DrawRect(clipRect, bgPaint);
+            }
             using var img = SKImage.FromBitmap(resized);
             canvas.DrawImage(img, imageRect);
             canvas.Restore();

@@ -54,6 +54,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<IconThumb> _topThumbs = [];
     private readonly Button _updateBtn;
     private SKColor? _backgroundColor;
+    private bool _bgTestingMode = true;
     private CancellationTokenSource? _bgDebounceCts;
     private bool _cornerEnabled;
     private double _cropOffsetX;
@@ -692,14 +693,30 @@ public partial class MainWindow : Window
         var clearBtn = new Button
         {
             Content = "Clear",
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 10, 6),
             IsEnabled = _backgroundColor.HasValue
         };
 
+        var testingCheck = new CheckBox
+        {
+            Content = "Testing mode",
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsChecked = _bgTestingMode
+        };
+        ToolTip.SetTip(testingCheck, "Preview only: fills the whole canvas and is dropped on save");
+
+        var bottomBar = new Grid
+        {
+            Margin = new Thickness(10, 0, 10, 6),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            Children = { testingCheck, clearBtn }
+        };
+        Grid.SetColumn(testingCheck, 0);
+        Grid.SetColumn(clearBtn, 1);
+
         var panel = new StackPanel
         {
-            Children = { viewScaled, clearBtn }
+            Children = { viewScaled, bottomBar }
         };
 
         var flyout = new Flyout
@@ -725,6 +742,16 @@ public partial class MainWindow : Window
             _backgroundColor = null;
             clearBtn.IsEnabled = false;
             RebuildThumbs(true);
+        };
+
+        testingCheck.IsCheckedChanged += (_, _) =>
+        {
+            var next = testingCheck.IsChecked == true;
+            if (_bgTestingMode == next)
+                return;
+            _bgTestingMode = next;
+            if (_backgroundColor.HasValue)
+                DebouncedBgRebuild();
         };
 
         flyout.ShowAt(_bgColorToggleCtrl);
@@ -930,7 +957,7 @@ public partial class MainWindow : Window
             {
                 var (resized, preview) = await Task.Run(() =>
                 {
-                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, liveZoom, _backgroundColor, _fxState.Shadow, _fxState.Stroke);
+                    var r = IconFactory.ResizePadded(liveSource, live.Size, liveMask, livePad, liveFit, liveCx, liveCy, liveZoom, _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode);
                     var p = IconThumb.ToAvaloniaBitmap(r);
                     return (r, p);
                 }, ct);
@@ -993,7 +1020,7 @@ public partial class MainWindow : Window
             {
                 ct.ThrowIfCancellationRequested();
                 var thumbSource = SourceFor(thumb) ?? source;
-                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), ZoomFor(thumb), _backgroundColor, _fxState.Shadow, _fxState.Stroke);
+                var resized = IconFactory.ResizePadded(thumbSource, thumb.Size, MaskFor(thumb), PaddingFor(thumb), FitModeFor(thumb), CropXFor(thumb), CropYFor(thumb), ZoomFor(thumb), _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode);
                 var preview = IconThumb.ToAvaloniaBitmap(resized);
                 if (ct.IsCancellationRequested)
                 {
@@ -1400,7 +1427,7 @@ public partial class MainWindow : Window
                 {
                     var src = SourceFor(t);
                     if (src != null)
-                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), ZoomFor(t), _backgroundColor, _fxState.Shadow, _fxState.Stroke));
+                        images.Add(IconFactory.ResizePadded(src, t.Size, MaskFor(t), PaddingFor(t), FitModeFor(t), CropXFor(t), CropYFor(t), ZoomFor(t), _bgTestingMode ? null : _backgroundColor, _fxState.Shadow, _fxState.Stroke, !_bgTestingMode));
                 }
             }
 
