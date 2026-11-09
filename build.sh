@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds ImageToIcon into bin/<configuration>/<rid>/.
-# Target scope selects which runtimes are built (minimal|standard|full).
-# Usage: $0 [Debug|Release] [minimal|standard|full]
+# Target scope selects which runtimes are built (minimal|standard|full|all).
+# Usage: $0 [Debug|Release] [minimal|standard|full|all]
 
 set -euo pipefail
 
@@ -22,18 +22,19 @@ scope="minimal"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         Debug|Release) configuration="$1" ;;
-        minimal|standard|full) scope="$1" ;;
+        minimal|standard|full|all) scope="$1" ;;
         --help|-h)
             echo -e "
 ${ul}${white}Usage${nc}
-  $(basename "$0") [Debug|Release] [minimal|standard|full]
+  $(basename "$0") [Debug|Release] [minimal|standard|full|all]
 
 ${ul}${white}Options${nc}
   ${green}Debug${nc}       Build with debug symbols (default).
   ${green}Release${nc}     Build optimised release output.
   ${green}minimal${nc}     Build linux-x64 only (default).
   ${green}standard${nc}    Build linux-x64 and win-x64.
-  ${green}full${nc}        Build linux-x64, linux-arm64, win-x64, win-arm64, osx-x64 and osx-arm64.
+  ${green}full${nc}        Build linux-x64, linux-arm64, win-x64 and win-arm64.
+  ${green}all${nc}         Like full plus osx-x64 and osx-arm64 (raw binaries, no .app bundle).
   ${green}--help, -h${nc}  Show this help text and exit.
 "
             exit 0 ;;
@@ -45,7 +46,8 @@ done
 case "$scope" in
     minimal)  rids=(linux-x64) ;;
     standard) rids=(linux-x64 win-x64) ;;
-    full)     rids=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64) ;;
+    full)     rids=(linux-x64 linux-arm64 win-x64 win-arm64) ;;
+    all)      rids=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64) ;;
 esac
 
 # ── Dependency check ──────────────────────────────────────────────────────────
