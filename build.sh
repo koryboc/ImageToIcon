@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds ImageToIcon into bin/<configuration>/<rid>/.
-# Debug: linux-x64 only. Release: linux-x64 and win-x64 in separate subdirectories.
-# Usage: $0 [Debug|Release]
+# Target scope selects which runtimes are built (minimal|standard|full).
+# Usage: $0 [Debug|Release] [minimal|standard|full]
 
 set -euo pipefail
 
@@ -17,18 +17,23 @@ ul='\033[4m'
 # ── Args ──────────────────────────────────────────────────────────────────────
 
 configuration="Debug"
+scope="minimal"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         Debug|Release) configuration="$1" ;;
+        minimal|standard|full) scope="$1" ;;
         --help|-h)
             echo -e "
 ${ul}${white}Usage${nc}
-  $(basename "$0") [Debug|Release]
+  $(basename "$0") [Debug|Release] [minimal|standard|full]
 
 ${ul}${white}Options${nc}
-  ${green}Debug${nc}     Build with debug symbols (default).
-  ${green}Release${nc}   Build optimised release output.
+  ${green}Debug${nc}       Build with debug symbols (default).
+  ${green}Release${nc}     Build optimised release output.
+  ${green}minimal${nc}     Build linux-x64 only (default).
+  ${green}standard${nc}    Build linux-x64 and win-x64.
+  ${green}full${nc}        Build linux-x64, linux-arm64, win-x64, win-arm64, osx-x64 and osx-arm64.
   ${green}--help, -h${nc}  Show this help text and exit.
 "
             exit 0 ;;
@@ -36,6 +41,12 @@ ${ul}${white}Options${nc}
     esac
     shift
 done
+
+case "$scope" in
+    minimal)  rids=(linux-x64) ;;
+    standard) rids=(linux-x64 win-x64) ;;
+    full)     rids=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64) ;;
+esac
 
 # ── Dependency check ──────────────────────────────────────────────────────────
 
@@ -80,12 +91,9 @@ publish() {
     fi
 }
 
-if [[ "$configuration" == "Debug" ]]; then
-    publish linux-x64
-else
-    publish linux-x64
-    publish win-x64
-fi
+for rid in "${rids[@]}"; do
+    publish "$rid"
+done
 
 echo -e "\n${green}${ol}$(basename "$0")${white}${ol} done!${nc}"
 echo -e "  Output: ${green}$OUT_BASE/${nc}\n"
