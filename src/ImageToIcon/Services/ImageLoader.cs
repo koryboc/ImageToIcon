@@ -31,7 +31,7 @@ public static class ImageLoader
                         .ToDictionary(kv => kv.Key, kv => kv.Value);
 
     public static readonly string[] SupportedExtensions =
-        Categories.Values.SelectMany(v => v).ToArray();
+        Categories.Values.SelectMany(v => v).OrderBy(e => e, StringComparer.OrdinalIgnoreCase).ToArray();
 
     public static bool IsSupported(string path)
     {
