@@ -67,10 +67,21 @@ Run `ImageToIcon --help` to see the full list of options, including format, corn
 
 | Option | Description |
 | --- | --- |
-| `--cli`, `/cli` | Run in CLI mode. |
-| `--o=DIR`, `/o=DIR` | Output directory for the generated `.ico` files. |
-| `--sizes=<list>` | Comma-separated list of icon sizes to generate (2–4096). |
-| `--help`, `/?` | Show usage information. |
+| `--cli` | Run in CLI mode. |
+| `--o=DIR` | Output directory. |
+| `--name=NAME` | Output base name (default: input file name). Single input only. |
+| `--format=ico\|icns\|hicolor` | Output format (default: `ico`). |
+| `--hicolor-archive` | Write hicolor as `.tar.gz` instead of a folder. |
+| `--sizes=<list>` | Comma-separated icon sizes (2–4096). |
+| `--corner=0..1` | Corner radius (0 = square, 1 = full circle). |
+| `--padding=0..1` | Padding fraction. |
+| `--fit=fit\|stretch\|crop` | Fit mode (default: `fit`). |
+| `--bg=#RRGGBB[AA]` | Background color. |
+| `--shadow=#RGBA,offX,offY,blur` | Shadow — offsets and blur as fraction of size. |
+| `--stroke=#RGBA,width[,offset]` | Stroke — width fraction, offset 0..1. |
+| `--shadow-no-bg` | Shadow ignores background (only with `--bg`). |
+| `--stroke-no-bg` | Stroke ignores background (only with `--bg`). |
+| `--help` | Show usage information. |
 
 ---
 
