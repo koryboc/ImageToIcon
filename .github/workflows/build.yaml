@@ -28,27 +28,15 @@ jobs:
           dotnet-version: '10.x'
 
       - name: Build
-        run: bash build.sh Release
+        run: bash build.sh Release full
 
       - name: Package release archives
         if: startsWith(github.ref, 'refs/tags/')
         id: package
         run: |
           set -euo pipefail
-          stamp="$(date +%Y-%m-%d_%H-%M-%S)"
-          archives=()
-          for rid in linux-x64 win-x64; do
-            name="ImageToIcon_${rid}_${stamp}.zip"
-            (cd "bin/Release/${rid}" && zip -r "../../../${name}" .)
-            archives+=("$name")
-          done
-          combined="ImageToIcon_both-platforms-x64_${stamp}.zip"
-          combined_stage="$(mktemp -d)"
-          cp bin/Release/linux-x64/ImageToIcon "$combined_stage/"
-          cp bin/Release/win-x64/ImageToIcon.exe "$combined_stage/"
-          (cd "$combined_stage" && zip -r "${GITHUB_WORKSPACE}/${combined}" .)
-          rm -rf "$combined_stage"
-          archives+=("$combined")
+          bash release.sh
+          mapfile -t archives < <(find bin/Release -maxdepth 1 -name '*.zip' -printf '%f\n' | sort)
           printf 'archives<<EOF\n%s\nEOF\n' "$(printf '%s\n' "${archives[@]}")" >> "$GITHUB_OUTPUT"
 
       - name: Create or update release
@@ -61,10 +49,14 @@ jobs:
           tag="${GITHUB_REF#refs/tags/}"
           title="$(date +%Y-%m-%d)"
           mapfile -t archives <<< "$ARCHIVES"
+          archive_paths=()
+          for a in "${archives[@]}"; do
+            archive_paths+=("bin/Release/$a")
+          done
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title"
-            gh release upload "$tag" "${archives[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$tag" "${archive_paths[@]}" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$tag" "${archives[@]}" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "" --prerelease
+            gh release create "$tag" "${archive_paths[@]}" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "" --prerelease
           fi
