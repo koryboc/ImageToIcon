@@ -13,7 +13,7 @@
 <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/Si13n7/ImageToIcon?logo=github&logoColor=silver&style=for-the-badge" title="Check the latest release" alt="Release"></a>
 </p>
 
-**ImageToIcon** is a small cross-platform tool for turning any image into a multi-size Windows `.ico` file. Drop in a single picture and it generates all the standard icon sizes at once, with clean Lanczos downscaling — no wizard, no upsell, no bundle of proprietary editors.
+**ImageToIcon** is a small cross-platform tool for turning any image into a multi-size icon set — Windows `.ico`, macOS `.icns`, or a Linux hicolor tree. Drop in a single picture and it generates all the standard sizes at once, with clean Lanczos downscaling — no wizard, no upsell, no bundle of proprietary editors.
 
 > Every icon workflow used to mean juggling three tools: one to resize, one to compose, one to export. ImageToIcon collapses that into one window and one save button.
 
