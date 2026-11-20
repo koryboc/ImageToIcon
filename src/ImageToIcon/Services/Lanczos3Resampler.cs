@@ -33,7 +33,7 @@ public static class Lanczos3Resampler
             {
                 canvas.Clear(SKColors.Transparent);
                 using var img = SKImage.FromBitmap(source);
-                canvas.DrawImage(img, 0, 0);
+                canvas.DrawImage(img, 0, 0, new SKSamplingOptions());
             }
 
             src = converted;

@@ -130,7 +130,7 @@ public static class IconFactory
             }
 
             using var img0 = SKImage.FromBitmap(resized);
-            canvas.DrawImage(img0, imageRect);
+            canvas.DrawImage(img0, imageRect, new SKSamplingOptions());
             canvas.Restore();
             canvas.Flush();
             return result;
@@ -154,7 +154,7 @@ public static class IconFactory
             }
 
             using var img = SKImage.FromBitmap(resized);
-            lc.DrawImage(img, imageRect);
+            lc.DrawImage(img, imageRect, new SKSamplingOptions());
             return bmp;
         }
 
@@ -184,7 +184,7 @@ public static class IconFactory
             var sigma = (float)Math.Max(0, sh.Blur * size);
             using var shadowPaint = new SKPaint();
             shadowPaint.ImageFilter = SKImageFilter.CreateDropShadowOnly((float)(sh.OffsetX * size), (float)(sh.OffsetY * size), sigma, sigma, sh.Color);
-            canvas.DrawImage(LayerFor(shadowWithBg), 0, 0, shadowPaint);
+            canvas.DrawImage(LayerFor(shadowWithBg), 0, 0, default, shadowPaint);
         }
 
         void DrawBg()
@@ -234,7 +234,7 @@ public static class IconFactory
                         dc.Clear(SKColors.Transparent);
                         using var dp = new SKPaint();
                         dp.ImageFilter = SKImageFilter.CreateDilate(outerR, outerR);
-                        dc.DrawImage(subject, 0, 0, dp);
+                        dc.DrawImage(subject, 0, 0, default, dp);
                     }
 
                     using var dilatedImg = SKImage.FromBitmap(dilated);
@@ -246,15 +246,15 @@ public static class IconFactory
                         using var fillPaint = new SKPaint();
                         fillPaint.ColorFilter = SKColorFilter.CreateBlendMode(st.Color, SKBlendMode.SrcIn);
                         fillPaint.IsAntialias = true;
-                        orc.DrawImage(dilatedImg, 0, 0, fillPaint);
+                        orc.DrawImage(dilatedImg, 0, 0, default, fillPaint);
 
                         using var cutPaint = new SKPaint();
                         cutPaint.BlendMode = SKBlendMode.DstOut;
-                        orc.DrawImage(subject, 0, 0, cutPaint);
+                        orc.DrawImage(subject, 0, 0, default, cutPaint);
                     }
 
                     using var outerRingImg = SKImage.FromBitmap(outerRing);
-                    canvas.DrawImage(outerRingImg, 0, 0);
+                    canvas.DrawImage(outerRingImg, 0, 0, new SKSamplingOptions());
                 }
             }
 
@@ -265,7 +265,7 @@ public static class IconFactory
                 canvas.ClipRect(clipRect);
             using (var finalImg = SKImage.FromBitmap(resized))
             {
-                canvas.DrawImage(finalImg, imageRect);
+                canvas.DrawImage(finalImg, imageRect, new SKSamplingOptions());
             }
 
             canvas.Restore();
@@ -281,7 +281,7 @@ public static class IconFactory
                     ec.Clear(SKColors.Transparent);
                     using var ep = new SKPaint();
                     ep.ImageFilter = SKImageFilter.CreateErode(innerR, innerR);
-                    ec.DrawImage(subject, 0, 0, ep);
+                    ec.DrawImage(subject, 0, 0, default, ep);
                 }
 
                 using var erodedImg = SKImage.FromBitmap(eroded);
@@ -293,15 +293,15 @@ public static class IconFactory
                     using var fillPaint = new SKPaint();
                     fillPaint.ColorFilter = SKColorFilter.CreateBlendMode(st.Color, SKBlendMode.SrcIn);
                     fillPaint.IsAntialias = true;
-                    rc.DrawImage(subject, 0, 0, fillPaint);
+                    rc.DrawImage(subject, 0, 0, default, fillPaint);
 
                     using var cutPaint = new SKPaint();
                     cutPaint.BlendMode = SKBlendMode.DstOut;
-                    rc.DrawImage(erodedImg, 0, 0, cutPaint);
+                    rc.DrawImage(erodedImg, 0, 0, default, cutPaint);
                 }
 
                 using var ringImg = SKImage.FromBitmap(ring);
-                canvas.DrawImage(ringImg, 0, 0);
+                canvas.DrawImage(ringImg, 0, 0, new SKSamplingOptions());
             }
 
             canvas.Flush();
